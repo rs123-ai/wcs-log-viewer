@@ -324,6 +324,7 @@ function loadDates() {
 function refreshDayView() {
   const entries=getAllEntries();
   if(!entries.length){resetUI();return;}
+  try {
   const incidents=extractIncidents(entries);
   const summary=incidentSummary(incidents);
   const rank=deviceRanking(incidents).slice(0,15).map(d=>({...d,topTypes:Object.entries(d.byType).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([t,c])=>({type:t,count:c}))}));
@@ -342,6 +343,10 @@ function refreshDayView() {
   renderErrorBars('errorTypeList',dist);
   populateFilters(rank,dist);
   loadIncidents();
+  } catch(e) {
+    document.getElementById('uploadMsg').style.display='block';
+    document.getElementById('uploadMsg').innerHTML='<span class="fail">ERROR: '+e.message+'</span>';
+  }
 }
 
 function resetUI() {
