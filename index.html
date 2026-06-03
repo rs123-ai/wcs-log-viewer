@@ -111,6 +111,17 @@ input[type=file]::file-selector-button{display:none}
   </div>
   <div class="card" style="margin-bottom:10px"><h3>周错误类型分布</h3><div id="wErrBars"></div></div>
   <table><thead><tr><th>日期</th><th>故障</th><th>已解决</th><th>未解决</th><th>平均</th><th>最长</th><th>主要故障设备</th></tr></thead><tbody id="wtb"></tbody></table>
+
+  <h3 style="margin:14px 0 8px 0">周故障事件列表</h3>
+  <div class="filters">
+    <select id="wfd"><option value="">全部设备</option></select>
+    <select id="wft"><option value="">全部类型</option></select>
+    <select id="wfr"><option value="">全部状态</option><option value="1">已解决</option><option value="0">未解决</option></select>
+    <span class="page" id="wpg"></span>
+    <button class="btn2" onclick="changeWPage(-1)">◀</button>
+    <button class="btn2" onclick="changeWPage(1)">▶</button>
+  </div>
+  <table><thead><tr><th>设备</th><th>类型</th><th>日期</th><th>开始</th><th>结束</th><th>持续</th><th>重复</th><th>条码</th><th>状态</th></tr></thead><tbody id="wtb2"></tbody></table>
 </div>
 
 <script>
@@ -220,6 +231,7 @@ var logStore={};var currentPage=1;var PAGE_SIZE=15;
 var incidents=[],filtered=[];
 var devChart=null,wdevChart=null,wtrendChart=null;
 var currentTab='day';var activeDate='';
+var weekIncidents=[],weekFiltered=[],weekPage=1;
 
 // ============================== STORAGE ==============================
 function saveData(){
@@ -499,7 +511,39 @@ function refreshWeek(){
     var d=dailyData[i];
     tbody.innerHTML+='<tr><td><strong>'+d.date+'</strong></td><td>'+d.total+'</td><td style="color:#0c8">'+d.resolved+'</td><td style="color:#f44">'+d.unresolved+'</td><td>'+d.avg+'分</td><td>'+d.max+'分</td><td>'+d.tops+'</td></tr>';
   }
+
+  // Weekly incident list
+  weekIncidents=extractIncidents(allEntries);
+  var wrank=deviceRank(weekIncidents);var wdist=typeDist(weekIncidents);
+  var wfd=document.getElementById('wfd');wfd.innerHTML='<option value="">全部设备</option>';
+  for(var i=0;i<wrank.length;i++)wfd.innerHTML+='<option>'+wrank[i].device+'</option>';
+  var wft=document.getElementById('wft');wft.innerHTML='<option value="">全部类型</option>';
+  for(var i=0;i<wdist.length;i++)wft.innerHTML+='<option>'+wdist[i].type+'</option>';
+  document.getElementById('wfd').onchange=function(){weekPage=1;filterWeekIncidents();};
+  document.getElementById('wft').onchange=function(){weekPage=1;filterWeekIncidents();};
+  document.getElementById('wfr').onchange=function(){weekPage=1;filterWeekIncidents();};
+  weekPage=1;filterWeekIncidents();
 }
+
+function filterWeekIncidents(){
+  var dev=document.getElementById('wfd').value;
+  var typ=document.getElementById('wft').value;
+  var res=document.getElementById('wfr').value;
+  weekFiltered=[];
+  for(var i=0;i<weekIncidents.length;i++){
+    var inc=weekIncidents[i];
+    if(dev&&inc.device!==dev)continue;if(typ&&inc.type!==typ)continue;
+    if(res==='1'&&!inc.resolved)continue;if(res==='0'&&inc.resolved)continue;
+    weekFiltered.push(inc);
+  }
+  var start=(weekPage-1)*PAGE_SIZE;var items=weekFiltered.slice(start,start+PAGE_SIZE);
+  var tb=document.getElementById('wtb2');
+  if(!items.length){tb.innerHTML='<tr><td colspan="9" style="color:#78809a;text-align:center;padding:20px">无匹配</td></tr>';}
+  else{tb.innerHTML='';for(var i=0;i<items.length;i++){var inc=items[i];tb.innerHTML+='<tr><td><strong>'+inc.device+'</strong></td><td>'+inc.type+'</td><td>'+inc.date+'</td><td>'+inc.st.slice(11,19)+'</td><td>'+inc.et.slice(11,19)+'</td><td>'+fmtDur(inc.dur)+'</td><td>'+inc.rc+'</td><td>'+(inc.rb||inc.bc||'-')+'</td><td class="'+(inc.resolved?'badge-ok':'badge-no')+'">'+(inc.resolved?'已解决':'未解决')+'</td></tr>';}}
+  document.getElementById('wpg').innerHTML=weekFiltered.length+'条 · '+weekPage+'/'+(Math.ceil(weekFiltered.length/PAGE_SIZE)||1)+'页';
+}
+
+function changeWPage(d){weekPage=Math.max(1,weekPage+d);filterWeekIncidents();}
 
 function renderWDevChart(rank){
   if(wdevChart){wdevChart.destroy();wdevChart=null;}
