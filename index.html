@@ -269,30 +269,30 @@ function setupUpload() {
   const input = document.getElementById('fileInput');
   document.body.addEventListener('dragover',e=>e.preventDefault());
   document.body.addEventListener('drop',e=>{e.preventDefault();handleFiles(e.dataTransfer.files);});
-  input.addEventListener('change',()=>{handleFiles(input.files);input.value='';});
+  input.addEventListener('change',function(){handleFiles(this.files);this.value='';});
 }
 
 function handleFiles(fileList) {
-  if (!fileList.length) return;
+  if (!fileList||!fileList.length){alert('未选择文件');return;}
   const msg=document.getElementById('uploadMsg'); msg.style.display='block'; msg.innerHTML='解析中...';
-  let html=''; let count=0;
-  const readers = Array.from(fileList).map(f => new Promise(resolve => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const parsed = parseLog(reader.result, f.name);
-      logStore.set(parsed.date, parsed);
-      html += `<span class="ok">${f.name} → ${parsed.entries.length}条 / ${parsed.entries.filter(e=>e.level==='error').length}错</span> `;
-      count++; resolve();
+  let html=''; let done=0; const total=fileList.length;
+  for(let i=0;i<total;i++){
+    const f=fileList[i]; const reader=new FileReader();
+    reader.onload=function(){
+      try{
+        const parsed=parseLog(reader.result,f.name);
+        logStore.set(parsed.date,parsed);
+        html+='<span class="ok">'+f.name+' → '+parsed.entries.length+'条 / '+parsed.entries.filter(function(e){return e.level==='error'}).length+'错</span> ';
+      }catch(e){html+='<span class="fail">'+f.name+':解析错误 '+e.message+'</span> ';}
+      done++; if(done>=total) finish();
     };
-    reader.onerror = () => { html += `<span class="fail">${f.name}:读取失败</span> `; resolve(); };
+    reader.onerror=function(){html+='<span class="fail">'+f.name+':读取失败</span> ';done++;if(done>=total)finish();};
     reader.readAsText(f);
-  }));
-  Promise.all(readers).then(()=>{
+  }
+  function finish(){
     msg.innerHTML=html||'无文件';
-    saveStore();
-    currentPage=1;
-    refreshAll();
-  });
+    saveStore(); currentPage=1; refreshAll();
+  }
 }
 
 // ==================== VIEWS ====================
