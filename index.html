@@ -51,6 +51,7 @@ input[type=file]::file-selector-button{display:none}
   <div style="display:flex;align-items:center;gap:10px"><h1>WCS 仓储设备日志分析</h1><span class="sl" id="tag">无数据</span></div>
   <div style="display:flex;gap:8px">
     <input type="file" id="fupload" multiple accept=".log,.txt">
+    <button id="btnShare" style="padding:7px 14px;border:1px solid #0c8;border-radius:5px;background:transparent;color:#0c8;cursor:pointer;font-size:13px;font-family:inherit" onclick="toggleShare()">共享模式</button>
     <button class="btn2" onclick="clearAll()">清除</button>
     <button class="btn2" onclick="exportCSV()">导出</button>
   </div>
@@ -232,6 +233,7 @@ var incidents=[],filtered=[];
 var devChart=null,wdevChart=null,wtrendChart=null;
 var currentTab='day';var activeDate='';
 var weekIncidents=[],weekFiltered=[],weekPage=1;
+var shared=false;
 
 // ============================== STORAGE ==============================
 function saveData(){
@@ -262,6 +264,7 @@ function loadData(){
 document.addEventListener('DOMContentLoaded',function(){
   loadData();
   document.getElementById('fupload').addEventListener('change',function(){
+    if(shared){uploadShared(this);return;}
     var files=this.files;if(!files||!files.length)return;
     document.getElementById('msg').innerHTML='解析中...';
     var done=0;var html='';
@@ -281,6 +284,110 @@ document.addEventListener('DOMContentLoaded',function(){
   });
   refresh();
 });
+
+// ===== SHARED MODE =====
+function toggleShare(){
+  if(shared){shared=false;document.getElementById('btnShare').style.background='transparent';document.getElementById('btnShare').style.color='#0c8';document.getElementById('btnShare').textContent='共享模式';document.getElementById('tag').innerHTML='本地模式';renderDateTabs();refreshDay();return;}
+  document.getElementById('btnShare').textContent='连接中...';
+  fetch('/api/dates').then(function(r){return r.json();}).then(function(){
+    shared=true;
+    document.getElementById('btnShare').style.background='#0c8';document.getElementById('btnShare').style.color='#fff';document.getElementById('btnShare').textContent='共享中';
+    loadShared();
+  }).catch(function(){document.getElementById('btnShare').textContent='共享模式';alert('无法连接服务器');});
+}
+
+function uploadShared(input){
+  var files=input.files;if(!files||!files.length)return;
+  document.getElementById('msg').innerHTML='上传中...';
+  var form=new FormData();for(var i=0;i<files.length;i++)form.append('logs',files[i]);
+  fetch('/api/upload',{method:'POST',body:form}).then(function(r){return r.json();}).then(function(data){
+    var html='';for(var i=0;i<data.results.length;i++){var r=data.results[i];html+=r.ok?'<span class="ok">'+r.filename+' → '+r.entries+'条 / '+r.errors+'错</span> ':'<span class="fail">'+r.filename+':错误</span> ';}
+    document.getElementById('msg').innerHTML=html;currentPage=1;loadShared();
+  }).catch(function(e){document.getElementById('msg').innerHTML='<span class="fail">上传失败</span>';});
+}
+
+function loadShared(){
+  fetch('/api/dashboard').then(function(r){return r.json();}).then(function(d){
+    if(d.empty){document.getElementById('tag').innerHTML='无数据 · 共享';resetStats();return;}
+    document.getElementById('tag').innerHTML=d.dateCount+'天 · 共享';
+    document.getElementById('s1').innerHTML=d.incidentsTotal;document.getElementById('s2').innerHTML=d.summary.resolved;
+    document.getElementById('s3').innerHTML=d.summary.unresolved;document.getElementById('s4').innerHTML=d.summary.avgMin+'分';
+    document.getElementById('s5').innerHTML=d.summary.maxMin+'分';document.getElementById('s6').innerHTML=d.dateCount;
+    renderDevChart(d.deviceRank);renderErrorBars('errBars',d.errorDist);
+    var fd=document.getElementById('fd');fd.innerHTML='<option value="">全部设备</option>';
+    for(var i=0;i<d.deviceRank.length;i++)fd.innerHTML+='<option>'+d.deviceRank[i].device+'</option>';
+    var ft=document.getElementById('ft');ft.innerHTML='<option value="">全部类型</option>';
+    for(var i=0;i<d.errorDist.length;i++)ft.innerHTML+='<option>'+d.errorDist[i].type+'</option>';
+    document.getElementById('fd').onchange=function(){currentPage=1;loadSharedIncidents();};
+    document.getElementById('ft').onchange=function(){currentPage=1;loadSharedIncidents();};
+    document.getElementById('fr').onchange=function(){currentPage=1;loadSharedIncidents();};
+    loadSharedIncidents();
+    // Date dropdown
+    fetch('/api/dates').then(function(r){return r.json();}).then(function(dates){
+      var sel=document.getElementById('dsel');sel.innerHTML='<option value="">全部（'+dates.length+'天）</option>';
+      for(var i=0;i<dates.length;i++)sel.innerHTML+='<option value="'+dates[i].date+'">'+dates[i].date+' （'+dates[i].errors+'错）</option>';
+    });
+  }).catch(function(){document.getElementById('tag').innerHTML='加载失败';});
+}
+
+function loadSharedIncidents(){
+  var p='page='+currentPage+'&pageSize='+PAGE_SIZE;
+  var dev=document.getElementById('fd').value;var typ=document.getElementById('ft').value;var res=document.getElementById('fr').value;
+  if(dev)p+='&device='+encodeURIComponent(dev);if(typ)p+='&errorType='+encodeURIComponent(typ);if(res)p+='&resolved='+res;
+  if(activeDate)p+='&date='+activeDate;
+  fetch('/api/incidents?'+p).then(function(r){return r.json();}).then(function(data){
+    var tb=document.getElementById('tb');
+    if(!data.incidents.length){tb.innerHTML='<tr><td colspan="9" style="color:#78809a;text-align:center;padding:20px">无匹配</td></tr>';}
+    else{tb.innerHTML='';for(var i=0;i<data.incidents.length;i++){var inc=data.incidents[i];tb.innerHTML+='<tr><td><strong>'+inc.device+'</strong></td><td>'+inc.errorType+'</td><td>'+inc.date+'</td><td>'+(inc.startTimestamp||'').slice(11,19)+'</td><td>'+(inc.endTimestamp||'').slice(11,19)+'</td><td>'+inc.durationStr+'</td><td>'+inc.repeatCount+'</td><td>'+(inc.displayBarcode||inc.barcode||'-')+'</td><td class="'+(inc.resolved?'badge-ok':'badge-no')+'">'+(inc.resolved?'已解决':'未解决')+'</td></tr>';}}
+    document.getElementById('pg').innerHTML=data.total+'条 · '+data.page+'/'+data.totalPages+'页';
+  });
+}
+
+function loadSharedWeek(){
+  var wf=document.getElementById('wsFrom').value;var wt=document.getElementById('wsTo').value;
+  var params='';if(wf)params+='&dateFrom='+wf;if(wt)params+='&dateTo='+wt;
+  fetch('/api/weekly?'+(params?'?'+params.substring(1):'')).then(function(r){return r.json();}).then(function(data){
+    if(!data.dailyData||!data.dailyData.length)return;
+    var ws=data.weekSummary;document.getElementById('wmsg').innerHTML='<span class="ok">共'+(ws.total||0)+'条 · 已解决'+(ws.resolved||0)+' · 平均'+(ws.avgMin||0)+'分</span>';
+    renderWDevChart(data.weekDeviceRank||[]);renderErrorBars('wErrBars',data.weekErrorDist||[]);
+    if(data.dailyData.length){
+      renderWTrend(data.dailyData);
+      var tb=document.getElementById('wtb');tb.innerHTML='';
+      for(var i=0;i<data.dailyData.length;i++){var d=data.dailyData[i];var tops='';for(var j=0;j<Math.min(d.topDevices.length,5);j++)tops+=d.topDevices[j].device+'('+d.topDevices[j].count+') ';tb.innerHTML+='<tr><td><strong>'+d.date+'</strong></td><td>'+d.totalIncidents+'</td><td style="color:#0c8">'+d.resolved+'</td><td style="color:#f44">'+d.unresolved+'</td><td>'+d.avgMin+'分</td><td>'+d.maxMin+'分</td><td>'+tops+'</td></tr>';}
+    }
+    // Weekly incident list
+    var p='page='+weekPage+'&pageSize='+PAGE_SIZE;if(wf)p+='&dateFrom='+wf;if(wt)p+='&dateTo='+wt;
+    fetch('/api/incidents?'+p).then(function(r){return r.json();}).then(function(idata){
+      weekIncidents=idata.incidents||[];
+      var wfd=document.getElementById('wfd');wfd.innerHTML='<option value="">全部设备</option>';
+      var wft=document.getElementById('wft');wft.innerHTML='<option value="">全部类型</option>';
+      document.getElementById('wfd').onchange=function(){weekPage=1;filterWeekIncidents();};
+      document.getElementById('wft').onchange=function(){weekPage=1;filterWeekIncidents();};
+      document.getElementById('wfr').onchange=function(){weekPage=1;filterWeekIncidents();};
+      filterWeekIncidentsShared(idata);
+    });
+  });
+}
+
+function filterWeekIncidentsShared(idata){
+  var dev=document.getElementById('wfd').value;var typ=document.getElementById('wft').value;var res=document.getElementById('wfr').value;
+  var items=idata.incidents||[];
+  if(dev)items=items.filter(function(i){return i.device===dev;});
+  if(typ)items=items.filter(function(i){return i.errorType===typ;});
+  if(res==='1')items=items.filter(function(i){return i.resolved;});
+  if(res==='0')items=items.filter(function(i){return !i.resolved;});
+  var start=(weekPage-1)*PAGE_SIZE;var page=items.slice(start,start+PAGE_SIZE);
+  var tb=document.getElementById('wtb2');
+  if(!page.length){tb.innerHTML='<tr><td colspan="9" style="color:#78809a;text-align:center;padding:20px">无匹配</td></tr>';}
+  else{tb.innerHTML='';for(var i=0;i<page.length;i++){var inc=page[i];tb.innerHTML+='<tr><td><strong>'+inc.device+'</strong></td><td>'+inc.errorType+'</td><td>'+inc.date+'</td><td>'+(inc.startTimestamp||'').slice(11,19)+'</td><td>'+(inc.endTimestamp||'').slice(11,19)+'</td><td>'+inc.durationStr+'</td><td>'+inc.repeatCount+'</td><td>'+(inc.displayBarcode||inc.barcode||'-')+'</td><td class="'+(inc.resolved?'badge-ok':'badge-no')+'">'+(inc.resolved?'已解决':'未解决')+'</td></tr>';}}
+  document.getElementById('wpg').innerHTML=items.length+'条 · '+weekPage+'/'+(Math.ceil(items.length/PAGE_SIZE)||1)+'页';
+}
+
+function resetStats(){
+  document.getElementById('s1').innerHTML='-';document.getElementById('s2').innerHTML='-';document.getElementById('s3').innerHTML='-';
+  document.getElementById('s4').innerHTML='-';document.getElementById('s5').innerHTML='-';document.getElementById('s6').innerHTML='-';
+  document.getElementById('tb').innerHTML='';
+}
 
 function getAllEntries(dateFilter){
   var entries=[];var dates=Object.keys(logStore);
@@ -322,7 +429,7 @@ function switchTab(tab){
   document.getElementById('tabWeek').className='tab-btn'+(tab==='week'?' active':'');
   document.getElementById('viewDay').style.display=tab==='day'?'block':'none';
   document.getElementById('viewWeek').style.display=tab==='week'?'block':'none';
-  if(tab==='day')refreshDay();else refreshWeek();
+  if(tab==='day'){if(shared)loadShared();else refreshDay();}else refreshWeek();
 }
 
 // ============================== DAY VIEW ==============================
@@ -332,6 +439,7 @@ function refresh(){
 }
 
 function refreshDay(){
+  if(shared){loadShared();return;}
   renderDateTabs();
   var entries=getAllEntries(activeDate);
   if(!entries.length){
@@ -466,6 +574,7 @@ function changePage(d){currentPage=Math.max(1,currentPage+d);filterIncidents();}
 
 // ============================== WEEK VIEW ==============================
 function refreshWeek(){
+  if(shared){loadSharedWeek();return;}
   var allDates=Object.keys(logStore).sort();
   if(!allDates.length){document.getElementById('wtb').innerHTML='<tr><td colspan="7" style="color:#78809a;text-align:center;padding:20px">无数据</td></tr>';return;}
   // Filter by week date range
@@ -566,14 +675,16 @@ function renderWTrend(dailyData){
 // ============================== CLEAR / EXPORT ==============================
 function clearAll(){
   if(!confirm('确定清除所有数据？'))return;
+  if(shared){fetch('/api/data',{method:'DELETE'}).then(function(){loadShared();});return;}
   logStore={};incidents=[];filtered=[];currentPage=1;
   if(devChart){devChart.destroy();devChart=null;}
   if(wdevChart){wdevChart.destroy();wdevChart=null;}
   if(wtrendChart){wtrendChart.destroy();wtrendChart=null;}
-  refresh();
+  sessionStorage.removeItem('wcs_data');renderDateTabs();refreshDay();
 }
 
 function exportCSV(){
+  if(shared){window.open('/api/export','_blank');return;}
   var csv='设备,错误类型,日期,开始时间,结束时间,持续(秒),重复次数,条码,状态\n';
   for(var i=0;i<incidents.length;i++){
     var inc=incidents[i];
