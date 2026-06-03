@@ -323,8 +323,10 @@ function loadDates() {
 // ==================== DAY VIEW ====================
 function refreshDayView() {
   const entries=getAllEntries();
-  if(!entries.length){resetUI();return;}
+  var dbg=document.getElementById('uploadMsg');
+  if(!entries.length){dbg.style.display='block';dbg.innerHTML='DEBUG: 0 entries in logStore, size='+logStore.size;resetUI();return;}
   try {
+  dbg.style.display='block';dbg.innerHTML='DEBUG: '+entries.length+' entries, '+logStore.size+' dates';
   const incidents=extractIncidents(entries);
   const summary=incidentSummary(incidents);
   const rank=deviceRanking(incidents).slice(0,15).map(d=>({...d,topTypes:Object.entries(d.byType).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([t,c])=>({type:t,count:c}))}));
@@ -344,8 +346,9 @@ function refreshDayView() {
   populateFilters(rank,dist);
   loadIncidents();
   } catch(e) {
-    document.getElementById('uploadMsg').style.display='block';
-    document.getElementById('uploadMsg').innerHTML='<span class="fail">ERROR: '+e.message+'</span>';
+    var dbg2=document.getElementById('uploadMsg');
+    dbg2.style.display='block';
+    dbg2.innerHTML='<span class="fail">REFRESH ERROR: '+e.message+' | '+e.stack+'</span>';
   }
 }
 
