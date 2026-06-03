@@ -273,7 +273,8 @@ function setupUpload() {
 }
 
 function handleFiles(fileList) {
-  if (!fileList||!fileList.length){alert('未选择文件');return;}
+  alert('GOT '+ (fileList?fileList.length:0) +' files');
+  if (!fileList||!fileList.length){alert('NO FILE');return;}
   const msg=document.getElementById('uploadMsg'); msg.style.display='block'; msg.innerHTML='解析中...';
   let html=''; let done=0; const total=fileList.length;
   for(let i=0;i<total;i++){
@@ -281,6 +282,7 @@ function handleFiles(fileList) {
     reader.onload=function(){
       try{
         const parsed=parseLog(reader.result,f.name);
+        alert('Parsed: '+parsed.entries.length+' entries, '+parsed.entries.filter(function(e){return e.level==='error'}).length+' errors');
         logStore.set(parsed.date,parsed);
         html+='<span class="ok">'+f.name+' → '+parsed.entries.length+'条 / '+parsed.entries.filter(function(e){return e.level==='error'}).length+'错</span> ';
       }catch(e){html+='<span class="fail">'+f.name+':解析错误 '+e.message+'</span> ';}
@@ -291,6 +293,7 @@ function handleFiles(fileList) {
   }
   function finish(){
     msg.innerHTML=html||'无文件';
+    alert('Store size: '+logStore.size+', entries: '+getAllEntries().length);
     saveStore(); currentPage=1; refreshAll();
   }
 }
@@ -322,6 +325,7 @@ function loadDates() {
 // ==================== DAY VIEW ====================
 function refreshDayView() {
   const entries=getAllEntries();
+  alert('refreshDayView: '+entries.length+' entries, logStore size: '+logStore.size);
   if(!entries.length){resetUI();return;}
   const incidents=extractIncidents(entries);
   const summary=incidentSummary(incidents);
