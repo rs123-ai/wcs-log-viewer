@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WCS 仓储设备日志分析</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+:root{--bg:#11141b;--card:#1a1e28;--border:#2a3040;--text:#e0e4ec;--dim:#78809a;--red:#f44;--green:#0c8;--yellow:#fa3;--blue:#59f;--radius:8px}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:auto}
+body{font:14px/1.5 -apple-system,"Microsoft YaHei",sans-serif;background:var(--bg);color:var(--text)}
+#app{max-width:1400px;margin:0 auto;padding:16px 24px 40px}
+header{display:flex;justify-content:space-between;align-items:center;padding-bottom:14px;border-bottom:1px solid var(--border)}
+.header-left{display:flex;align-items:center;gap:10px}
+header h1{font-size:18px}
+.header-actions{display:flex;gap:8px}
+.tag{font-size:11px;padding:3px 10px;border-radius:12px;background:var(--border);color:var(--dim)}
+.tag.on{background:#1a3a2a;color:var(--green)}
+.btn{padding:7px 16px;border:1px solid var(--blue);border-radius:5px;background:var(--blue);color:#fff;cursor:pointer;font-size:13px;font-family:inherit;white-space:nowrap}
+.btn:hover{opacity:.85}
+.btn-outline{background:transparent;border-color:var(--border);color:var(--dim)}
+.btn-outline:hover{border-color:var(--dim);color:var(--text)}
+.btn-sm{padding:4px 10px;font-size:12px}
+.upload-msg{padding:8px 0;font-size:13px}
+.upload-msg .ok{color:var(--green)}
+.upload-msg .fail{color:var(--red)}
+.view-tabs{display:flex;gap:8px;padding:12px 0}
+.view-tab{padding:8px 20px;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--dim);cursor:pointer;font-size:14px;font-family:inherit}
+.view-tab:hover{border-color:var(--dim);color:var(--text)}
+.view-tab.active{background:var(--blue);border-color:var(--blue);color:#fff}
+.stats{display:flex;gap:10px;padding-bottom:10px}
+.stat{flex:1;background:var(--card);border-radius:var(--radius);padding:8px 12px;text-align:center;border-top:3px solid var(--blue)}
+.stat:nth-child(1){border-top-color:var(--blue)}.stat:nth-child(2){border-top-color:var(--red)}.stat:nth-child(3){border-top-color:var(--green)}.stat:nth-child(4){border-top-color:var(--yellow)}.stat:nth-child(5){border-top-color:#a78bfa}.stat:nth-child(6){border-top-color:#f97316}
+.stat-val{font-size:18px;font-weight:700}
+.stat div:last-child{font-size:10px;color:var(--dim);margin-top:1px}
+.content-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.card{background:var(--card);border-radius:var(--radius);padding:12px;margin-bottom:10px}
+.card h3{font-size:13px;margin-bottom:6px}
+.card-chart{position:relative}
+.card-chart canvas{max-height:280px}
+.main-table{width:100%;border-collapse:collapse;font-size:13px}
+.main-table th{background:#252a38;padding:9px 12px;text-align:left;color:var(--dim);font-weight:600;white-space:nowrap}
+.main-table td{padding:7px 12px;border-bottom:1px solid var(--border);white-space:nowrap}
+.main-table tbody tr:hover{background:rgba(255,255,255,.02)}
+.badge-resolved{color:var(--green);font-weight:600}
+.badge-unresolved{color:var(--red);font-weight:600}
+.list-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px}
+.list-header h3{margin-bottom:0}
+.list-filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.list-filters select{padding:5px 10px;background:#252a38;border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:12px;font-family:inherit}
+.page-info{font-size:12px;color:var(--dim)}
+.range-bar{display:flex;align-items:center;gap:10px;padding:8px 0 14px;font-size:13px;color:var(--dim)}
+.range-bar select{padding:5px 10px;background:#252a38;border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:13px;font-family:inherit}
+.error-bars{display:flex;flex-direction:column;gap:6px}
+.error-bar-row{display:flex;align-items:center;gap:8px;font-size:12px}
+.error-bar-label{width:90px;text-align:right;color:var(--dim);flex-shrink:0}
+.error-bar-track{flex:1;height:18px;background:#252a38;border-radius:3px;overflow:hidden}
+.error-bar-fill{height:100%;border-radius:3px;transition:width .3s}
+.error-bar-count{width:50px;text-align:right;font-weight:600;flex-shrink:0}
+.error-bar-pct{width:40px;text-align:right;color:var(--dim);font-size:11px;flex-shrink:0}
+@media(max-width:900px){.content-row{grid-template-columns:1fr}.stats{flex-wrap:wrap}.stat{flex:1 1 30%}}
+</style>
+</head>
+<body>
+<div id="app">
+<header>
+  <div class="header-left"><h1> WCS 仓储设备日志分析</h1><span id="statusTag" class="tag">无数据</span></div>
+  <div class="header-actions">
+    <input type="file" id="fileInput" multiple accept=".log,.txt" hidden>
+    <button class="btn" onclick="document.getElementById('fileInput').click()"> 上传日志</button>
+    <button class="btn btn-outline" onclick="clearAll()"> 清除</button>
+    <button class="btn btn-outline" onclick="exportCSV()"> 导出</button>
+  </div>
+</header>
+<div id="uploadMsg" class="upload-msg" style="display:none"></div>
+<nav class="view-tabs">
+  <button class="view-tab active" data-view="day" onclick="switchView('day')"> 当日故障</button>
+  <button class="view-tab" data-view="week" onclick="switchView('week')"> 周故障分析</button>
+</nav>
+
+<!-- DAY VIEW -->
+<div id="viewDay">
+  <section class="stats">
+    <div class="stat"><div class="stat-val" id="sDays">-</div><div>分析天数</div></div>
+    <div class="stat"><div class="stat-val" id="sIncidents">-</div><div>故障事件</div></div>
+    <div class="stat"><div class="stat-val" id="sResolved">-</div><div>已解决</div></div>
+    <div class="stat"><div class="stat-val" id="sUnresolved">-</div><div>未解决</div></div>
+    <div class="stat"><div class="stat-val" id="sAvgDur">-</div><div>平均耗时</div></div>
+    <div class="stat"><div class="stat-val" id="sMaxDur">-</div><div>最长耗时</div></div>
+  </section>
+  <section class="content-row">
+    <div class="card card-chart"><h3>设备故障排行 & 故障内容</h3><canvas id="chartDevice"></canvas></div>
+    <div class="card"><h3>错误类型分布</h3><div id="errorTypeList" class="error-bars"></div></div>
+  </section>
+  <section class="card incident-card">
+    <div class="list-header"><h3>故障事件列表</h3>
+      <div class="list-filters">
+        <select id="fDevice"><option value="">全部设备</option></select>
+        <select id="fType"><option value="">全部类型</option></select>
+        <select id="fResolved"><option value="">全部状态</option><option value="1">已解决</option><option value="0">未解决</option></select>
+        <span class="page-info" id="pageInfo"></span>
+        <button class="btn btn-sm" id="btnPrev" onclick="changePage(-1)"> </button>
+        <button class="btn btn-sm" id="btnNext" onclick="changePage(1)"> </button>
+      </div>
+    </div>
+    <table class="main-table"><thead><tr><th>设备</th><th>类型</th><th>日期</th><th>开始</th><th>结束</th><th>持续</th><th>重复</th><th>条码</th><th>状态</th></tr></thead><tbody id="incidentTbody"></tbody></table>
+  </section>
+</div>
+
+<!-- WEEK VIEW -->
+<div id="viewWeek" style="display:none">
+  <section class="range-bar">
+    <label>日期范围：</label><select id="wDateFrom"><option value="">最早</option></select><span>至</span><select id="wDateTo"><option value="">最晚</option></select>
+    <button class="btn btn-sm" onclick="loadWeekView()"> 查询</button>
+    <span id="weekSummary" style="margin-left:16px;font-size:13px;color:var(--dim)"></span>
+  </section>
+  <section class="content-row">
+    <div class="card card-chart"><h3>周设备故障排行</h3><canvas id="chartWeekDevice"></canvas></div>
+    <div class="card"><h3>周错误类型分布</h3><div id="weekErrorBars" class="error-bars"></div></div>
+  </section>
+  <section class="content-row">
+    <div class="card card-chart"><h3>每日故障趋势</h3><canvas id="chartWeekTrend"></canvas></div>
+    <div class="card card-chart"><h3>每日 MTTR 趋势</h3><canvas id="chartWeekMTTR"></canvas></div>
+  </section>
+  <section class="card"><h3>每日明细</h3><table id="weekTable" class="main-table"><thead><tr><th>日期</th><th>故障事件</th><th>已解决</th><th>未解决</th><th>平均耗时</th><th>最长耗时</th><th>高频故障设备</th></tr></thead><tbody></tbody></table></section>
+</div>
+</div>
+
+<script>
+// ==================== PARSER (client-side) ====================
+const LINE_RE = /^([NET]):\s+(\d{2})\s+(\d{2}:\d{2}:\d{2})\.(\d+)-(.+)$/;
+const DEVICE_RE = /设备[：:](\w+)/;
+const DEVICE_TAG_RE = /<设备[：:](\w+)/;
+const ERROR_BAOCUO_RE = /报错[：:]\s*(.+?)(?:$|[,;，；])/;
+const ERROR_NOREAD_RE = /错误条码\s*NOREAD/i;
+const ERROR_WMS_WAIT_RE = /等待WMS回复入库货位/;
+const ERROR_TASK_FAIL_RE = /任务写入(\d*)次?失败/;
+const ERROR_MSG_RE = /错误[：:]\s*(.+?)(?:$|[,;，；])/;
+const ERROR_YICHANG_RE = /异常[：:]\s*(.+?)(?:$|[,;，；])/;
+const BARCODE_RE = /条码[：:]\s*(\w+)/;
+const BARCODE_TAG_RE = /\|[^|]*\|(\w+)\|/;
+
+function parseLine(line, fileDate) {
+  const m = line.match(LINE_RE);
+  if (!m) return null;
+  const [, level, day, timeStr, ms, message] = m;
+  const [h, mi, s] = timeStr.split(':').map(Number);
+  const ts = `${fileDate}T${String(h).padStart(2,'0')}:${String(mi).padStart(2,'0')}:${String(s).padStart(2,'0')}.${ms}`;
+  let device = null;
+  const dm1 = message.match(DEVICE_RE);
+  const dm2 = message.match(DEVICE_TAG_RE);
+  if (dm1) device = dm1[1]; else if (dm2) device = dm2[1];
+
+  let actualLevel = level;
+  if (level === 'E' && ERROR_WMS_WAIT_RE.test(message)) actualLevel = 'N';
+
+  let errorType = null;
+  if (actualLevel === 'E') {
+    const baoCuo = message.match(ERROR_BAOCUO_RE);
+    const yiChang = message.match(ERROR_YICHANG_RE);
+    const errMsg = message.match(ERROR_MSG_RE);
+    if (baoCuo) { errorType = baoCuo[1].trim(); }
+    else if (ERROR_NOREAD_RE.test(message)) { errorType = 'NOREAD'; }
+    else if (ERROR_TASK_FAIL_RE.test(message)) { errorType = '任务写入失败'; }
+    else if (yiChang) { const yc = yiChang[1].trim(); const ora = yc.match(/ORA-\d+/); errorType = ora ? ora[0] : yc.substring(0, 40); }
+    else if (errMsg) { errorType = errMsg[1].trim().substring(0, 40); }
+    else if (message.includes('错误')||message.includes('故障')) { errorType = '其他错误'; }
+    else { errorType = '未分类'; }
+  }
+
+  let barcode = null;
+  const bm1 = message.match(BARCODE_RE);
+  const bm2 = message.match(BARCODE_TAG_RE);
+  if (bm1) barcode = bm1[1]; else if (bm2) barcode = bm2[1];
+
+  return { timestamp:ts, time:new Date(ts), date:fileDate, hour:h, level:actualLevel==='E'?'error':actualLevel==='N'?'normal':'manual', levelRaw:actualLevel, device, errorType, barcode, message:message.substring(0,300) };
+}
+
+function parseLog(text, filename) {
+  const dm = filename.match(/(\d{4})(\d{2})(\d{2})/);
+  const fileDate = dm ? `${dm[1]}-${dm[2]}-${dm[3]}` : 'unknown';
+  const lines = text.split(/\r?\n/).filter(l=>l.trim());
+  const entries = lines.map(l=>parseLine(l,fileDate)).filter(Boolean);
+  return { filename, date:fileDate, entries };
+}
+
+// ==================== ANALYZER (client-side) ====================
+function extractIncidents(entries) {
+  const open = {};
+  const closed = [];
+  for (const e of entries) {
+    if ((e.level==='normal'||e.level==='manual') && e.device) {
+      for (const key of Object.keys(open)) {
+        const [dev] = key.split('|');
+        if (dev === e.device) {
+          const inc = open[key];
+          inc.resolveTime = e.time; inc.resolveTimestamp = e.timestamp;
+          inc.resolved = true; inc.durationSec = Math.round((e.time - inc.startTime)/1000);
+          if (!inc.barcode && e.barcode) inc.barcode = e.barcode;
+          if (e.barcode) inc.resolveBarcode = e.barcode;
+          closed.push(inc); delete open[key];
+        }
+      }
+      continue;
+    }
+    if (e.level!=='error'||!e.device) continue;
+    const key = e.device+'|'+(e.errorType||'未分类');
+    if (open[key]) {
+      open[key].endTime = e.time; open[key].endTimestamp = e.timestamp;
+      open[key].repeatCount++;
+      if (e.barcode) open[key].barcode = e.barcode;
+    } else {
+      open[key] = { device:e.device, errorType:e.errorType||'未分类', startTime:e.time, startTimestamp:e.timestamp, endTime:e.time, endTimestamp:e.timestamp, date:e.date, barcode:e.barcode, resolveBarcode:null, repeatCount:1, resolved:false, resolveTime:null, resolveTimestamp:null, durationSec:0 };
+    }
+  }
+  for (const inc of Object.values(open)) { inc.durationSec = Math.round((inc.endTime - inc.startTime)/1000); closed.push(inc); }
+  return closed.sort((a,b)=>a.startTime-b.startTime);
+}
+
+function incidentSummary(incidents) {
+  const resolved = incidents.filter(i=>i.resolved);
+  const durs = resolved.map(i=>i.durationSec);
+  const avg = a=>a.length?Math.round(a.reduce((x,y)=>x+y,0)/a.length):0;
+  const med = a=>{if(!a.length)return 0;const s=[...a].sort((x,y)=>x-y);const m=Math.floor(s.length/2);return s.length%2?s[m]:Math.round((s[m-1]+s[m])/2)};
+  const max = a=>a.length?Math.max(...a):0;
+  return {total:incidents.length,resolved:resolved.length,unresolved:incidents.length-resolved.length,avgSec:avg(durs),medianSec:med(durs),maxSec:max(durs),avgMin:(avg(durs)/60).toFixed(1),medianMin:(med(durs)/60).toFixed(1),maxMin:(max(durs)/60).toFixed(1)};
+}
+
+function deviceRanking(incidents) {
+  const map = new Map();
+  for (const inc of incidents) {
+    const d = map.get(inc.device) || { device:inc.device, totalIncidents:0, totalRepeats:0, byType:{}, unresolved:0 };
+    d.totalIncidents++; d.totalRepeats+=inc.repeatCount; d.byType[inc.errorType]=(d.byType[inc.errorType]||0)+1; if(!inc.resolved)d.unresolved++;
+    map.set(inc.device,d);
+  }
+  return Array.from(map.values()).sort((a,b)=>b.totalIncidents-a.totalIncidents);
+}
+
+function errorTypeDist(incidents) {
+  const map = new Map();
+  for (const inc of incidents) map.set(inc.errorType,(map.get(inc.errorType)||0)+1);
+  return Array.from(map.entries()).map(([t,c])=>({type:t,count:c,pct:(c/incidents.length*100).toFixed(1)})).sort((a,b)=>b.count-a.count);
+}
+
+function formatDuration(sec) {
+  if (sec<60) return sec+'秒';
+  if (sec<3600) return Math.floor(sec/60)+'分'+sec%60+'秒';
+  return Math.floor(sec/3600)+'时'+Math.floor((sec%3600)/60)+'分';
+}
+
+// ==================== STATE ====================
+const logStore = new Map();
+let chart=null, currentPage=1, currentView='day', weekCharts={};
+const PAGE_SIZE=15;
+
+// ==================== INIT ====================
+document.addEventListener('DOMContentLoaded',()=>{
+  setupUpload();
+  // Restore from sessionStorage
+  try { const saved=sessionStorage.getItem('wcs_log_store'); if(saved){ const data=JSON.parse(saved); for(const[k,v]of Object.entries(data)) logStore.set(k,v); } } catch(e){}
+  refreshAll();
+});
+
+function saveStore() { try { sessionStorage.setItem('wcs_log_store',JSON.stringify(Object.fromEntries(logStore))); } catch(e){} }
+
+// ==================== UPLOAD ====================
+function setupUpload() {
+  const input = document.getElementById('fileInput');
+  document.body.addEventListener('dragover',e=>e.preventDefault());
+  document.body.addEventListener('drop',e=>{e.preventDefault();handleFiles(e.dataTransfer.files);});
+  input.addEventListener('change',()=>{handleFiles(input.files);input.value='';});
+}
+
+function handleFiles(fileList) {
+  if (!fileList.length) return;
+  const msg=document.getElementById('uploadMsg'); msg.style.display='block'; msg.innerHTML='解析中...';
+  let html=''; let count=0;
+  const readers = Array.from(fileList).map(f => new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const parsed = parseLog(reader.result, f.name);
+      logStore.set(parsed.date, parsed);
+      html += `<span class="ok">${f.name} → ${parsed.entries.length}条 / ${parsed.entries.filter(e=>e.level==='error').length}错</span> `;
+      count++; resolve();
+    };
+    reader.onerror = () => { html += `<span class="fail">${f.name}:读取失败</span> `; resolve(); };
+    reader.readAsText(f);
+  }));
+  Promise.all(readers).then(()=>{
+    msg.innerHTML=html||'无文件';
+    saveStore();
+    currentPage=1;
+    refreshAll();
+  });
+}
+
+// ==================== VIEWS ====================
+function switchView(view) {
+  currentView=view;
+  document.querySelectorAll('.view-tab').forEach(t=>t.classList.toggle('active',t.dataset.view===view));
+  document.getElementById('viewDay').style.display=view==='day'?'block':'none';
+  document.getElementById('viewWeek').style.display=view==='week'?'block':'none';
+  if(view==='day') refreshDayView(); else loadWeekView();
+}
+
+function getAllEntries(dateFrom, dateTo) {
+  const entries=[];
+  for(const[date,data]of logStore){if((!dateFrom||date>=dateFrom)&&(!dateTo||date<=dateTo))entries.push(...data.entries);}
+  return entries.sort((a,b)=>a.time-b.time);
+}
+
+function refreshAll() { loadDates(); if(currentView==='day')refreshDayView(); else loadWeekView(); }
+
+function loadDates() {
+  const dates=Array.from(logStore.keys()).sort();
+  const opts=dates.map(d=>`<option value="${d}">${d}</option>`).join('');
+  document.getElementById('wDateFrom').innerHTML='<option value="">最早</option>'+opts;
+  document.getElementById('wDateTo').innerHTML='<option value="">最晚</option>'+opts;
+}
+
+// ==================== DAY VIEW ====================
+function refreshDayView() {
+  const entries=getAllEntries();
+  if(!entries.length){resetUI();return;}
+  const incidents=extractIncidents(entries);
+  const summary=incidentSummary(incidents);
+  const rank=deviceRanking(incidents).slice(0,15).map(d=>({...d,topTypes:Object.entries(d.byType).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([t,c])=>({type:t,count:c}))}));
+  const dist=errorTypeDist(incidents);
+
+  document.getElementById('sDays').textContent=logStore.size;
+  document.getElementById('sIncidents').textContent=incidents.length;
+  document.getElementById('sResolved').textContent=summary.resolved;
+  document.getElementById('sUnresolved').textContent=summary.unresolved;
+  document.getElementById('sAvgDur').textContent=summary.avgMin+'分';
+  document.getElementById('sMaxDur').textContent=summary.maxMin+'分';
+  document.getElementById('statusTag').className='tag on';
+  document.getElementById('statusTag').textContent=logStore.size+'天数据';
+
+  renderDeviceChart(rank);
+  renderErrorBars('errorTypeList',dist);
+  populateFilters(rank,dist);
+  loadIncidents();
+}
+
+function resetUI() {
+  ['sDays','sIncidents','sResolved','sUnresolved','sAvgDur','sMaxDur'].forEach(id=>document.getElementById(id).textContent='-');
+  document.getElementById('statusTag').className='tag'; document.getElementById('statusTag').textContent='无数据';
+  document.getElementById('incidentTbody').innerHTML=''; document.getElementById('pageInfo').textContent='';
+  if(chart){chart.destroy();chart=null;}
+}
+
+function renderDeviceChart(rank) {
+  if(chart)chart.destroy();
+  const ctx=document.getElementById('chartDevice'); if(!ctx||!rank.length)return;
+  chart=new Chart(ctx,{type:'bar',data:{labels:rank.map(d=>d.device),datasets:[{label:'故障事件',data:rank.map(d=>d.totalIncidents),backgroundColor:rank.map((_,i)=>`rgba(255,68,68,${1-i*0.05})`),borderRadius:4}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>'故障: '+ctx.raw,afterLabel:ctx=>{const d=rank[ctx.dataIndex];if(!d?.topTypes)return'';return d.topTypes.map(t=>'  '+t.type+': '+t.count+'次').join('\n');}}}}},scales:{x:{ticks:{color:'#78809a',font:{size:10}},grid:{color:'#2a3040'}},y:{ticks:{color:'#e0e4ec',font:{size:11}},grid:{display:false}}}}});
+}
+
+function renderErrorBars(id,dist) {
+  const c=document.getElementById(id); if(!c||!dist?.length)return;
+  const colors=['#f44','#fa3','#f97316','#59f','#0c8','#a78bfa','#78809a'];
+  const max=Math.max(...dist.map(d=>d.count),1);
+  c.innerHTML=dist.map((d,i)=>`<div class="error-bar-row"><span class="error-bar-label">${d.type}</span><div class="error-bar-track"><div class="error-bar-fill" style="width:${(d.count/max*100).toFixed(0)}%;background:${colors[i]||colors[6]}"></div></div><span class="error-bar-count">${d.count}</span><span class="error-bar-pct">${d.pct}%</span></div>`).join('');
+}
+
+function populateFilters(rank,dist) {
+  const dSel=document.getElementById('fDevice'); dSel.innerHTML='<option value="">全部设备</option>'+rank.map(d=>`<option>${d.device}</option>`).join('');
+  const tSel=document.getElementById('fType'); tSel.innerHTML='<option value="">全部类型</option>'+dist.map(d=>`<option>${d.type}</option>`).join('');
+  [dSel,tSel,document.getElementById('fResolved')].forEach(el=>{el.onchange=()=>{currentPage=1;loadIncidents();};});
+}
+
+function loadIncidents() {
+  const entries=getAllEntries();
+  let incidents=extractIncidents(entries);
+  const dev=document.getElementById('fDevice').value;
+  const typ=document.getElementById('fType').value;
+  const res=document.getElementById('fResolved').value;
+  if(dev)incidents=incidents.filter(i=>i.device===dev);
+  if(typ)incidents=incidents.filter(i=>i.errorType===typ);
+  if(res==='1')incidents=incidents.filter(i=>i.resolved);
+  if(res==='0')incidents=incidents.filter(i=>!i.resolved);
+  const total=incidents.length;
+  const start=(currentPage-1)*PAGE_SIZE;
+  const items=incidents.slice(start,start+PAGE_SIZE);
+  const tbody=document.getElementById('incidentTbody');
+  if(!items.length){tbody.innerHTML='<tr><td colspan="9" style="color:var(--dim);text-align:center;padding:20px">无匹配故障事件</td></tr>';}
+  else{tbody.innerHTML=items.map(i=>`<tr><td><strong>${i.device}</strong></td><td>${i.errorType}</td><td>${i.date}</td><td>${fmtT(i.startTimestamp)}</td><td>${fmtT(i.endTimestamp)}</td><td>${formatDuration(i.durationSec)}</td><td>${i.repeatCount}</td><td>${i.resolveBarcode||i.barcode||'-'}</td><td class="${i.resolved?'badge-resolved':'badge-unresolved'}">${i.resolved?'已解决':'未解决'}</td></tr>`).join('');}
+  document.getElementById('pageInfo').textContent=total+'条 · '+currentPage+'/'+(Math.ceil(total/PAGE_SIZE)||1)+'页';
+  document.getElementById('btnPrev').disabled=currentPage<=1;
+  document.getElementById('btnNext').disabled=currentPage>=Math.ceil(total/PAGE_SIZE);
+}
+
+function changePage(d){currentPage=Math.max(1,currentPage+d);loadIncidents();}
+
+// ==================== WEEK VIEW ====================
+function loadWeekView() {
+  const df=document.getElementById('wDateFrom').value;
+  const dt=document.getElementById('wDateTo').value;
+  let dates=Array.from(logStore.keys()).sort();
+  if(df)dates=dates.filter(d=>d>=df);
+  if(dt)dates=dates.filter(d=>d<=dt);
+  if(!dates.length){document.querySelector('#weekTable tbody').innerHTML='<tr><td colspan="7" style="color:var(--dim);text-align:center;padding:20px">无数据</td></tr>';return;}
+
+  const dailyData=[];
+  for(const date of dates) {
+    const entries=logStore.get(date).entries.sort((a,b)=>a.time-b.time);
+    const incidents=extractIncidents(entries);
+    const sum=incidentSummary(incidents);
+    const rank=deviceRanking(incidents);
+    dailyData.push({date,totalIncidents:incidents.length,resolved:sum.resolved,unresolved:sum.unresolved,avgMin:sum.avgMin,maxMin:sum.maxMin,topDevices:rank.slice(0,5).map(d=>({device:d.device,count:d.totalIncidents})),errorDist:errorTypeDist(incidents).slice(0,8)});
+  }
+
+  const allEntries=[]; for(const date of dates)allEntries.push(...logStore.get(date).entries);
+  allEntries.sort((a,b)=>a.time-b.time);
+  const allIncidents=extractIncidents(allEntries);
+  const weekDeviceRank=deviceRanking(allIncidents).slice(0,15);
+  const weekErrorDist=errorTypeDist(allIncidents);
+  const ws=incidentSummary(allIncidents);
+  document.getElementById('weekSummary').textContent=`共${ws.total}条 · 已解决${ws.resolved} · 平均${ws.avgMin}分 · 最长${ws.maxMin}分`;
+
+  // Device chart
+  if(weekCharts.device)weekCharts.device.destroy();
+  const ctx=document.getElementById('chartWeekDevice');
+  if(ctx&&weekDeviceRank.length){weekCharts.device=new Chart(ctx,{type:'bar',data:{labels:weekDeviceRank.map(d=>d.device),datasets:[{data:weekDeviceRank.map(d=>d.totalIncidents),backgroundColor:weekDeviceRank.map((_,i)=>`rgba(255,68,68,${1-i*0.05})`),borderRadius:4}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#78809a',font:{size:10}},grid:{color:'#2a3040'}},y:{ticks:{color:'#e0e4ec',font:{size:11}},grid:{display:false}}}}});}
+
+  // Error bars
+  renderErrorBars('weekErrorBars',weekErrorDist);
+
+  // Trend
+  if(weekCharts.trend)weekCharts.trend.destroy();
+  const ct=document.getElementById('chartWeekTrend');
+  if(ct){weekCharts.trend=new Chart(ct,{type:'bar',data:{labels:dailyData.map(d=>d.date.slice(5)),datasets:[{label:'故障事件',data:dailyData.map(d=>d.totalIncidents),backgroundColor:'rgba(244,68,68,0.7)',borderRadius:4},{label:'已解决',data:dailyData.map(d=>d.resolved),backgroundColor:'rgba(0,200,150,0.7)',borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#e0e4ec',font:{size:11}}}},scales:{x:{ticks:{color:'#78809a'},grid:{display:false}},y:{ticks:{color:'#78809a'},grid:{color:'#2a3040'}}}}});}
+
+  // MTTR
+  if(weekCharts.mttr)weekCharts.mttr.destroy();
+  const cm=document.getElementById('chartWeekMTTR');
+  if(cm){weekCharts.mttr=new Chart(cm,{type:'line',data:{labels:dailyData.map(d=>d.date.slice(5)),datasets:[{label:'平均MTTR(分)',data:dailyData.map(d=>Number(d.avgMin)||0),borderColor:'#f5a623',backgroundColor:'rgba(245,166,35,0.1)',borderWidth:2,pointRadius:4,tension:0.3},{label:'最长MTTR(分)',data:dailyData.map(d=>Number(d.maxMin)||0),borderColor:'#f44',backgroundColor:'rgba(244,68,68,0.1)',borderWidth:2,pointRadius:4,tension:0.3,borderDash:[5,5]}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#e0e4ec',font:{size:11}}}},scales:{x:{ticks:{color:'#78809a'},grid:{display:false}},y:{ticks:{color:'#78809a'},grid:{color:'#2a3040'},title:{text:'分钟',display:true,color:'#78809a'}}}});}
+
+  // Table
+  document.querySelector('#weekTable tbody').innerHTML=dailyData.map(d=>`<tr><td><strong>${d.date}</strong></td><td>${d.totalIncidents}</td><td style="color:var(--green)">${d.resolved}</td><td style="color:var(--red)">${d.unresolved}</td><td>${d.avgMin}分</td><td>${d.maxMin}分</td><td>${d.topDevices.map(dv=>dv.device+'('+dv.count+')').join(', ')}</td></tr>`).join('');
+}
+
+// ==================== EXPORT ====================
+function exportCSV() {
+  const entries=getAllEntries();
+  const incidents=extractIncidents(entries);
+  let csv='设备,错误类型,日期,开始时间,结束时间,持续(秒),重复次数,条码,状态\n';
+  for(const i of incidents){csv+=`${i.device},${i.errorType},${i.date},${fmtT(i.startTimestamp)},${fmtT(i.endTimestamp)},${i.durationSec},${i.repeatCount},${i.resolveBarcode||i.barcode||''},${i.resolved?'已解决':'未解决'}\n`;}
+  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='wcs-incidents.csv';a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// ==================== CLEAR ====================
+function clearAll() {
+  if(!confirm('确定清除所有数据？'))return;
+  logStore.clear(); sessionStorage.removeItem('wcs_log_store');
+  currentPage=1; resetUI();
+  Object.values(weekCharts).forEach(c=>c.destroy()); weekCharts={};
+  document.querySelector('#weekTable tbody').innerHTML='';
+}
+
+// ==================== HELPERS ====================
+function fmtT(ts){return ts?ts.slice(11,19):'-';}
+</script>
+</body>
+</html>
