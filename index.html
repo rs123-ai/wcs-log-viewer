@@ -38,6 +38,11 @@ input[type=file]::file-selector-button{display:none}
 .chart-wrap canvas{height:300px !important}
 .tab-btn{padding:8px 16px;border:1px solid #2a3040;border-radius:6px;background:transparent;color:#78809a;cursor:pointer;font-size:13px;font-family:inherit}
 .tab-btn.active{background:#59f;border-color:#59f;color:#fff}
+.dtabs{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.dtab{padding:5px 14px;border:1px solid #2a3040;border-radius:16px;background:transparent;color:#78809a;cursor:pointer;font-size:12px;font-family:inherit;white-space:nowrap}
+.dtab:hover{border-color:#78809a;color:#e0e4ec}
+.dtab.active{background:#252a38;border-color:#59f;color:#59f}
+.dtab .de{font-size:10px;color:#f44;margin-left:4px}
 </style>
 </head>
 <body>
@@ -51,6 +56,12 @@ input[type=file]::file-selector-button{display:none}
   </div>
 </div>
 <div class="msg" id="msg"></div>
+
+<!-- Date selector -->
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+  <span style="font-size:13px;color:#78809a">选择日期：</span>
+  <select id="dsel" style="padding:6px 12px;background:#252a38;border:1px solid #2a3040;border-radius:6px;color:#e0e4ec;font-size:13px;font-family:inherit;min-width:200px" onchange="selectDate(this.value)"></select>
+</div>
 
 <!-- Tabs -->
 <div style="display:flex;gap:8px;margin-bottom:10px">
@@ -202,10 +213,36 @@ function fmtDur(sec){
 var logStore={};var currentPage=1;var PAGE_SIZE=15;
 var incidents=[],filtered=[];
 var devChart=null,wdevChart=null,wtrendChart=null;
-var currentTab='day';
+var currentTab='day';var activeDate='';
+
+// ============================== STORAGE ==============================
+function saveData(){
+  try{
+    var save={};
+    var dates=Object.keys(logStore);
+    for(var i=0;i<dates.length;i++){save[dates[i]]=logStore[dates[i]];}
+    sessionStorage.setItem('wcs_data',JSON.stringify(save));
+  }catch(e){}
+}
+function loadData(){
+  try{
+    var raw=sessionStorage.getItem('wcs_data');
+    if(!raw)return;
+    var data=JSON.parse(raw);var keys=Object.keys(data);
+    for(var i=0;i<keys.length;i++){
+      var d=data[keys[i]];
+      // entries need time as Date
+      for(var j=0;j<d.entries.length;j++){
+        var e=d.entries[j];e.time=new Date(e.ts);
+      }
+      logStore[keys[i]]=d;
+    }
+  }catch(e){}
+}
 
 // ============================== INIT ==============================
 document.addEventListener('DOMContentLoaded',function(){
+  loadData();
   document.getElementById('fupload').addEventListener('change',function(){
     var files=this.files;if(!files||!files.length)return;
     document.getElementById('msg').innerHTML='解析中...';
@@ -217,9 +254,9 @@ document.addEventListener('DOMContentLoaded',function(){
           var p=parseLog(r.result,file.name);
           logStore[p.date]=p;
           html+='<span class="ok">'+file.name+' → '+p.entries.length+'条 / '+p.entries.filter(function(e){return e.level==='E';}).length+'错</span> ';
-          done++;if(done>=files.length){document.getElementById('msg').innerHTML=html;currentPage=1;refresh();}
+          done++;if(done>=files.length){document.getElementById('msg').innerHTML=html;currentPage=1;saveData();refresh();}
         };
-        r.onerror=function(){html+='<span class="fail">'+file.name+':失败</span> ';done++;if(done>=files.length){document.getElementById('msg').innerHTML=html;currentPage=1;refresh();}};
+        r.onerror=function(){html+='<span class="fail">'+file.name+':失败</span> ';done++;if(done>=files.length){document.getElementById('msg').innerHTML=html;currentPage=1;saveData();refresh();}};
         r.readAsText(file);
       })(files[i]);
     }
@@ -227,11 +264,29 @@ document.addEventListener('DOMContentLoaded',function(){
   refresh();
 });
 
-function getAllEntries(){
+function getAllEntries(dateFilter){
   var entries=[];var dates=Object.keys(logStore);
-  for(var i=0;i<dates.length;i++){var d=logStore[dates[i]];entries=entries.concat(d.entries);}
+  for(var i=0;i<dates.length;i++){
+    if(dateFilter&&dates[i]!==dateFilter)continue;
+    entries=entries.concat(logStore[dates[i]].entries);
+  }
   entries.sort(function(a,b){return a.ts.localeCompare(b.ts);});
   return entries;
+}
+
+function renderDateTabs(){
+  var dates=Object.keys(logStore).sort();var sel=document.getElementById('dsel');
+  sel.innerHTML='<option value="">全部（'+dates.length+'天）</option>';
+  for(var i=0;i<dates.length;i++){
+    var d=dates[i];
+    var errs=logStore[d].entries.filter(function(e){return e.level==='E';}).length;
+    sel.innerHTML+='<option value="'+d+'"'+(activeDate===d?' selected':'')+'>'+d+' （'+errs+'错）</option>';
+  }
+}
+
+function selectDate(date){
+  activeDate=date;currentPage=1;renderDateTabs();
+  if(currentTab==='day')refreshDay();else refreshWeek();
 }
 
 // ============================== TABS ==============================
@@ -246,11 +301,13 @@ function switchTab(tab){
 
 // ============================== DAY VIEW ==============================
 function refresh(){
+  renderDateTabs();
   if(currentTab==='day')refreshDay();else refreshWeek();
 }
 
 function refreshDay(){
-  var entries=getAllEntries();
+  renderDateTabs();
+  var entries=getAllEntries(activeDate);
   if(!entries.length){
     document.getElementById('tag').innerHTML='无数据';
     document.getElementById('s1').innerHTML='-';document.getElementById('s2').innerHTML='-';document.getElementById('s3').innerHTML='-';
@@ -259,14 +316,15 @@ function refreshDay(){
   }
   incidents=extractIncidents(entries);
   var sum=summarize(incidents);
-  var dates=Object.keys(logStore);
-  document.getElementById('tag').innerHTML=dates.length+'天数据';
+  var totalDates=Object.keys(logStore).length;
+  var sel=activeDate?activeDate:'全部('+totalDates+'天)';
+  document.getElementById('tag').innerHTML=sel;
   document.getElementById('s1').innerHTML=incidents.length;
   document.getElementById('s2').innerHTML=sum.resolved;
   document.getElementById('s3').innerHTML=sum.unresolved;
   document.getElementById('s4').innerHTML=(sum.avgSec/60).toFixed(1)+'分';
   document.getElementById('s5').innerHTML=(sum.maxSec/60).toFixed(1)+'分';
-  document.getElementById('s6').innerHTML=dates.length;
+  document.getElementById('s6').innerHTML=totalDates;
 
   // Charts
   var rank=deviceRank(incidents).slice(0,15);
