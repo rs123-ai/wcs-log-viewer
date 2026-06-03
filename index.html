@@ -51,7 +51,6 @@ input[type=file]::file-selector-button{display:none}
   <div style="display:flex;align-items:center;gap:10px"><h1>WCS 仓储设备日志分析</h1><span class="sl" id="tag">无数据</span></div>
   <div style="display:flex;gap:8px">
     <input type="file" id="fupload" multiple accept=".log,.txt">
-    <button id="btnShare" style="padding:7px 14px;border:1px solid #0c8;border-radius:5px;background:transparent;color:#0c8;cursor:pointer;font-size:13px;font-family:inherit" onclick="toggleShare()">共享模式</button>
     <button class="btn2" onclick="clearAll()">清除</button>
     <button class="btn2" onclick="exportCSV()">导出</button>
   </div>
@@ -62,6 +61,7 @@ input[type=file]::file-selector-button{display:none}
 <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
   <span style="font-size:13px;color:#78809a">选择日期：</span>
   <select id="dsel" style="padding:6px 12px;background:#252a38;border:1px solid #2a3040;border-radius:6px;color:#e0e4ec;font-size:13px;font-family:inherit;min-width:200px" onchange="selectDate(this.value)"></select>
+  <button id="btnDelDate" class="btn2" style="display:none" onclick="deleteCurrentDate()">删除此日期</button>
 </div>
 
 <!-- Tabs -->
@@ -262,9 +262,26 @@ function loadData(){
 
 // ============================== INIT ==============================
 document.addEventListener('DOMContentLoaded',function(){
-  loadData();
+  // Try server first, fall back to local
+  fetch('/api/dates').then(function(r){return r.json();}).then(function(){
+    shared=true;
+    setupSharedUpload();
+    loadShared();
+  }).catch(function(){
+    shared=false;loadData();
+    setupLocalUpload();
+    renderDateTabs();refreshDay();
+  });
+});
+
+function setupSharedUpload(){
   document.getElementById('fupload').addEventListener('change',function(){
-    if(shared){uploadShared(this);return;}
+    uploadShared(this);
+  });
+}
+
+function setupLocalUpload(){
+  document.getElementById('fupload').addEventListener('change',function(){
     var files=this.files;if(!files||!files.length)return;
     document.getElementById('msg').innerHTML='解析中...';
     var done=0;var html='';
@@ -282,20 +299,9 @@ document.addEventListener('DOMContentLoaded',function(){
       })(files[i]);
     }
   });
-  refresh();
-});
-
-// ===== SHARED MODE =====
-function toggleShare(){
-  if(shared){shared=false;document.getElementById('btnShare').style.background='transparent';document.getElementById('btnShare').style.color='#0c8';document.getElementById('btnShare').textContent='共享模式';document.getElementById('tag').innerHTML='本地模式';renderDateTabs();refreshDay();return;}
-  document.getElementById('btnShare').textContent='连接中...';
-  fetch('/api/dates').then(function(r){return r.json();}).then(function(){
-    shared=true;
-    document.getElementById('btnShare').style.background='#0c8';document.getElementById('btnShare').style.color='#fff';document.getElementById('btnShare').textContent='共享中';
-    loadShared();
-  }).catch(function(){document.getElementById('btnShare').textContent='共享模式';alert('无法连接服务器');});
 }
 
+// ===== SHARED MODE =====
 function uploadShared(input){
   var files=input.files;if(!files||!files.length)return;
   document.getElementById('msg').innerHTML='上传中...';
@@ -325,7 +331,8 @@ function loadShared(){
     // Date dropdown
     fetch('/api/dates').then(function(r){return r.json();}).then(function(dates){
       var sel=document.getElementById('dsel');sel.innerHTML='<option value="">全部（'+dates.length+'天）</option>';
-      for(var i=0;i<dates.length;i++)sel.innerHTML+='<option value="'+dates[i].date+'">'+dates[i].date+' （'+dates[i].errors+'错）</option>';
+      for(var i=0;i<dates.length;i++)sel.innerHTML+='<option value="'+dates[i].date+'"'+(activeDate===dates[i].date?' selected':'')+'>'+dates[i].date+' （'+dates[i].errors+'错）</option>';
+      document.getElementById('btnDelDate').style.display=activeDate?'inline-block':'none';
     });
   }).catch(function(){document.getElementById('tag').innerHTML='加载失败';});
 }
@@ -383,6 +390,14 @@ function filterWeekIncidentsShared(idata){
   document.getElementById('wpg').innerHTML=items.length+'条 · '+weekPage+'/'+(Math.ceil(items.length/PAGE_SIZE)||1)+'页';
 }
 
+function deleteCurrentDate(){
+  if(!activeDate){alert('请先选择要删除的日期');return;}
+  if(!confirm('确定删除 '+activeDate+' 的所有日志数据？此操作不可恢复。'))return;
+  fetch('/api/dates/'+encodeURIComponent(activeDate),{method:'DELETE'}).then(function(r){return r.json();}).then(function(data){
+    if(data.ok){activeDate='';loadShared();}
+  }).catch(function(){alert('删除失败');});
+}
+
 function resetStats(){
   document.getElementById('s1').innerHTML='-';document.getElementById('s2').innerHTML='-';document.getElementById('s3').innerHTML='-';
   document.getElementById('s4').innerHTML='-';document.getElementById('s5').innerHTML='-';document.getElementById('s6').innerHTML='-';
@@ -418,8 +433,10 @@ function renderDateTabs(){
 }
 
 function selectDate(date){
-  activeDate=date;currentPage=1;renderDateTabs();
-  if(currentTab==='day')refreshDay();else refreshWeek();
+  activeDate=date;currentPage=1;
+  document.getElementById('btnDelDate').style.display=date?'inline-block':'none';
+  renderDateTabs();
+  if(currentTab==='day'){if(shared)loadShared();else refreshDay();}else refreshWeek();
 }
 
 // ============================== TABS ==============================
