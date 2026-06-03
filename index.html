@@ -21,6 +21,8 @@ header h1{font-size:18px}
 .btn:hover{opacity:.85}
 .btn-outline{background:transparent;border-color:var(--border);color:var(--dim)}
 .btn-outline:hover{border-color:var(--dim);color:var(--text)}
+.file-btn{padding:7px 16px;border:1px solid var(--blue);border-radius:5px;background:var(--blue);color:#fff;cursor:pointer;font-size:13px;font-family:inherit;white-space:nowrap}
+.file-btn::file-selector-button{display:none}
 .btn-sm{padding:4px 10px;font-size:12px}
 .upload-msg{padding:8px 0;font-size:13px}
 .upload-msg .ok{color:var(--green)}
@@ -67,8 +69,7 @@ header h1{font-size:18px}
 <header>
   <div class="header-left"><h1> WCS 仓储设备日志分析</h1><span id="statusTag" class="tag">无数据</span></div>
   <div class="header-actions">
-    <input type="file" id="fileInput" multiple accept=".log,.txt" style="display:none">
-    <label class="btn" for="fileInput"> 上传日志</label>
+    <input type="file" id="fileInput" multiple accept=".log,.txt" class="file-btn">
     <button class="btn btn-outline" onclick="clearAll()"> 清除</button>
     <button class="btn btn-outline" onclick="exportCSV()"> 导出</button>
   </div>
@@ -269,7 +270,7 @@ function setupUpload() {
   const input = document.getElementById('fileInput');
   document.body.addEventListener('dragover',e=>e.preventDefault());
   document.body.addEventListener('drop',e=>{e.preventDefault();handleFiles(e.dataTransfer.files);});
-  input.addEventListener('change',function(){handleFiles(this.files);this.value='';});
+  input.addEventListener('change',function(){if(this.files&&this.files.length){handleFiles(this.files);this.value='';}});
 }
 
 function handleFiles(fileList) {
