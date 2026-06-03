@@ -99,6 +99,12 @@ input[type=file]::file-selector-button{display:none}
 <!-- WEEK VIEW -->
 <div id="viewWeek" style="display:none">
   <div class="msg" id="wmsg"></div>
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+    <span style="font-size:13px;color:#78809a">日期范围：</span>
+    <select id="wsFrom" style="padding:5px 10px;background:#252a38;border:1px solid #2a3040;border-radius:5px;color:#e0e4ec;font-size:12px;font-family:inherit" onchange="refreshWeek()"></select>
+    <span style="color:#78809a">至</span>
+    <select id="wsTo" style="padding:5px 10px;background:#252a38;border:1px solid #2a3040;border-radius:5px;color:#e0e4ec;font-size:12px;font-family:inherit" onchange="refreshWeek()"></select>
+  </div>
   <div class="row">
     <div class="card"><h3>周设备故障排行</h3><div class="chart-wrap"><canvas id="chartWDev"></canvas></div></div>
     <div class="card"><h3>周故障趋势</h3><div class="chart-wrap"><canvas id="chartWTrend"></canvas></div></div>
@@ -282,6 +288,14 @@ function renderDateTabs(){
     var errs=logStore[d].entries.filter(function(e){return e.level==='E';}).length;
     sel.innerHTML+='<option value="'+d+'"'+(activeDate===d?' selected':'')+'>'+d+' （'+errs+'错）</option>';
   }
+  // Also populate week date selectors
+  var wf=document.getElementById('wsFrom');var wt=document.getElementById('wsTo');
+  var wfVal=wf.value;var wtVal=wt.value;
+  wf.innerHTML='<option value="">最早</option>';wt.innerHTML='<option value="">最晚</option>';
+  for(var i=0;i<dates.length;i++){
+    wf.innerHTML+='<option value="'+dates[i]+'"'+(wfVal===dates[i]?' selected':'')+'>'+dates[i]+'</option>';
+    wt.innerHTML+='<option value="'+dates[i]+'"'+(wtVal===dates[i]?' selected':'')+'>'+dates[i]+'</option>';
+  }
 }
 
 function selectDate(date){
@@ -350,8 +364,53 @@ function renderDevChart(rank){
   if(devChart){devChart.destroy();devChart=null;}
   var ctx=document.getElementById('chartDev');if(!ctx||!rank.length)return;
   if(typeof Chart==='undefined'){document.getElementById('chartDev').parentNode.innerHTML='<span style="color:#78809a">图表加载失败</span>';return;}
+
+  // Collect all error types and assign colors
+  var allTypes={};var typeColors=[];
+  for(var i=0;i<rank.length;i++){
+    var types=Object.keys(rank[i].types);
+    for(var j=0;j<types.length;j++){
+      if(!allTypes[types[j]]){allTypes[types[j]]=true;typeColors.push(types[j]);}
+    }
+  }
+  var colors=['#f44','#fa3','#f97316','#59f','#0c8','#a78bfa','#f472b6','#ff784b','#38bdf8','#a3e635'];
+
+  // Build stacked datasets
+  var datasets=[];
+  for(var t=0;t<typeColors.length;t++){
+    var typeName=typeColors[t];
+    var data=[];
+    for(var d=0;d<rank.length;d++){
+      data.push(rank[d].types[typeName]||0);
+    }
+    datasets.push({
+      label:typeName,
+      data:data,
+      backgroundColor:colors[t%colors.length],
+      borderRadius:t===typeColors.length-1?4:0
+    });
+  }
+
+  // Labels: device + top type
+  var labels=rank.map(function(d){
+    var tops=Object.entries(d.types).sort(function(a,b){return b[1]-a[1];}).slice(0,2);
+    var extra=tops.map(function(t){return t[0]+'('+t[1]+')';}).join(' ');
+    return d.device+' | '+extra;
+  });
+
   try{
-    devChart=new Chart(ctx,{type:'bar',data:{labels:rank.map(function(d){return d.device;}),datasets:[{data:rank.map(function(d){return d.total;}),backgroundColor:rank.map(function(_,i){return 'rgba(255,68,68,'+(1-i*0.05)+')';}),borderRadius:4}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#78809a',font:{size:10}},grid:{color:'#2a3040'}},y:{ticks:{color:'#e0e4ec',font:{size:11}},grid:{display:false}}}}});
+    devChart=new Chart(ctx,{
+      type:'bar',
+      data:{labels:labels,datasets:datasets},
+      options:{
+        indexAxis:'y',responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{position:'bottom',labels:{color:'#e0e4ec',font:{size:10},padding:2,boxWidth:10}}},
+        scales:{
+          x:{stacked:true,ticks:{color:'#78809a',font:{size:10}},grid:{color:'#2a3040'}},
+          y:{stacked:true,ticks:{color:'#e0e4ec',font:{size:11}},grid:{display:false}}
+        }
+      }
+    });
   }catch(e){document.getElementById('chartDev').parentNode.innerHTML='<span style="color:#f44">图表错误: '+e.message+'</span>';}
 }
 
@@ -399,8 +458,16 @@ function changePage(d){currentPage=Math.max(1,currentPage+d);filterIncidents();}
 
 // ============================== WEEK VIEW ==============================
 function refreshWeek(){
-  var dates=Object.keys(logStore).sort();
-  if(!dates.length){document.getElementById('wtb').innerHTML='<tr><td colspan="7" style="color:#78809a;text-align:center;padding:20px">无数据</td></tr>';return;}
+  var allDates=Object.keys(logStore).sort();
+  if(!allDates.length){document.getElementById('wtb').innerHTML='<tr><td colspan="7" style="color:#78809a;text-align:center;padding:20px">无数据</td></tr>';return;}
+  // Filter by week date range
+  var wf=document.getElementById('wsFrom').value;
+  var wt=document.getElementById('wsTo').value;
+  var dates=[];
+  for(var i=0;i<allDates.length;i++){
+    if((!wf||allDates[i]>=wf)&&(!wt||allDates[i]<=wt))dates.push(allDates[i]);
+  }
+  if(!dates.length){document.getElementById('wtb').innerHTML='<tr><td colspan="7" style="color:#78809a;text-align:center;padding:20px">所选范围无数据</td></tr>';return;}
   var dailyData=[];
   for(var i=0;i<dates.length;i++){
     var entries=logStore[dates[i]].entries;
@@ -412,8 +479,9 @@ function refreshWeek(){
     dailyData.push({date:dates[i],total:inc.length,resolved:sum.resolved,unresolved:sum.unresolved,avg:(sum.avgSec/60).toFixed(1),max:(sum.maxSec/60).toFixed(1),tops:tops.join(', ')});
   }
 
-  // Week summary
-  var allEntries=getAllEntries();
+  // Week summary (filtered range)
+  var allEntries=[];for(var i=0;i<dates.length;i++){allEntries=allEntries.concat(logStore[dates[i]].entries);}
+  allEntries.sort(function(a,b){return a.ts.localeCompare(b.ts);});
   var allInc=extractIncidents(allEntries);
   var allSum=summarize(allInc);
   document.getElementById('wmsg').innerHTML='<span class="ok">共'+allInc.length+'条故障 · 已解决'+allSum.resolved+' · 平均'+(allSum.avgSec/60).toFixed(1)+'分 · 最长'+(allSum.maxSec/60).toFixed(1)+'分</span>';
