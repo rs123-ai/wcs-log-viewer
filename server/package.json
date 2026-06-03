@@ -1,0 +1,14 @@
+{
+  "name": "wcs-log-analyzer",
+  "version": "1.0.0",
+  "description": "仓储设备日志分析平台 — 异常频发点 + 问题解决追踪",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "multer": "^1.4.5-lts.1"
+  }
+}
