@@ -4,70 +4,100 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>WCS 日志分析</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <style>
 body{font:14px/1.5 -apple-system,"Microsoft YaHei",sans-serif;background:#11141b;color:#e0e4ec;margin:0;padding:16px 24px}
 h1{font-size:18px;margin:0}
-.header{display:flex;justify-content:space-between;align-items:center;padding-bottom:12px;border-bottom:1px solid #2a3040;margin-bottom:12px}
-.stats{display:flex;gap:10px;margin-bottom:12px}
-.stat{flex:1;background:#1a1e28;border-radius:8px;padding:8px 12px;text-align:center;border-top:3px solid #59f}
-.stat:nth-child(2){border-top-color:#f44}.stat:nth-child(3){border-top-color:#0c8}
-.stat:nth-child(4){border-top-color:#fa3}.stat:nth-child(5){border-top-color:#a78bfa}.stat:nth-child(6){border-top-color:#f97316}
-.stat-val{font-size:18px;font-weight:700}.stat-lbl{font-size:10px;color:#78809a}
-.btn{padding:7px 14px;border:1px solid #59f;border-radius:5px;background:#59f;color:#fff;cursor:pointer;font-size:13px;font-family:inherit}
+.row{display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.card{background:#1a1e28;border-radius:8px;padding:12px;flex:1;min-width:300px}
+.card h3{font-size:13px;margin:0 0 8px 0}
+.stats{display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.stat{flex:1;min-width:100px;background:#1a1e28;border-radius:8px;padding:8px 12px;text-align:center;border-top:3px solid #59f}
+.stat:nth-child(2){border-top-color:#f44}.stat:nth-child(3){border-top-color:#0c8}.stat:nth-child(4){border-top-color:#fa3}.stat:nth-child(5){border-top-color:#a78bfa}.stat:nth-child(6){border-top-color:#f97316}
+.sv{font-size:18px;font-weight:700}.sl{font-size:10px;color:#78809a}
+.btn{padding:7px 14px;border:1px solid #59f;border-radius:5px;background:#59f;color:#fff;cursor:pointer;font-size:13px;font-family:inherit;white-space:nowrap}
 .btn2{padding:7px 14px;border:1px solid #2a3040;border-radius:5px;background:transparent;color:#78809a;cursor:pointer;font-size:13px;font-family:inherit}
 .btn2:hover{color:#e0e4ec}
 table{width:100%;border-collapse:collapse;font-size:13px}
-th{background:#252a38;padding:9px 12px;text-align:left;color:#78809a}
-td{padding:7px 12px;border-bottom:1px solid #2a3040}
-.ok{color:#0c8}.fail{color:#f44}
+th{background:#252a38;padding:9px 12px;text-align:left;color:#78809a;white-space:nowrap}
+td{padding:7px 12px;border-bottom:1px solid #2a3040;white-space:nowrap}
+.ok{color:#0c8}.fail{color:#f44}.badge-ok{color:#0c8;font-weight:600}.badge-no{color:#f44;font-weight:600}
 input[type=file]{padding:7px 14px;border:1px solid #59f;border-radius:5px;background:#59f;color:#fff;cursor:pointer;font-size:13px}
 input[type=file]::file-selector-button{display:none}
 .msg{padding:8px 0;font-size:13px}
-.filters{display:flex;gap:8px;margin-bottom:10px;align-items:center}
+.filters{display:flex;gap:8px;margin-bottom:10px;align-items:center;flex-wrap:wrap}
 .filters select{padding:5px 10px;background:#252a38;border:1px solid #2a3040;border-radius:5px;color:#e0e4ec;font-size:12px}
 .page{font-size:12px;color:#78809a}
-.badge-ok{color:#0c8;font-weight:600}.badge-no{color:#f44;font-weight:600}
+.eb-row{display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:4px}
+.eb-label{width:90px;text-align:right;color:#78809a;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.eb-track{flex:1;height:16px;background:#252a38;border-radius:3px;overflow:hidden}
+.eb-fill{height:100%;border-radius:3px}
+.eb-count{width:45px;text-align:right;font-weight:600;flex-shrink:0}
+.eb-pct{width:36px;text-align:right;color:#78809a;font-size:11px;flex-shrink:0}
+.chart-wrap{position:relative;height:300px}
+.chart-wrap canvas{height:300px !important}
+.tab-btn{padding:8px 16px;border:1px solid #2a3040;border-radius:6px;background:transparent;color:#78809a;cursor:pointer;font-size:13px;font-family:inherit}
+.tab-btn.active{background:#59f;border-color:#59f;color:#fff}
 </style>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 </head>
 <body>
 
-<div class="header">
-  <h1>WCS 仓储设备日志分析</h1>
-  <div style="display:flex;gap:8px;align-items:center">
-    <span class="stat-lbl" id="tag">无数据</span>
-    <input type="file" id="f" multiple accept=".log,.txt">
+<div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:12px;border-bottom:1px solid #2a3040;margin-bottom:12px">
+  <div style="display:flex;align-items:center;gap:10px"><h1>WCS 仓储设备日志分析</h1><span class="sl" id="tag">无数据</span></div>
+  <div style="display:flex;gap:8px">
+    <input type="file" id="fupload" multiple accept=".log,.txt">
     <button class="btn2" onclick="clearAll()">清除</button>
     <button class="btn2" onclick="exportCSV()">导出</button>
   </div>
 </div>
 <div class="msg" id="msg"></div>
 
-<div class="stats" id="statsRow">
-  <div class="stat"><div class="stat-val" id="s1">-</div><div class="stat-lbl">故障事件</div></div>
-  <div class="stat"><div class="stat-val" id="s2">-</div><div class="stat-lbl">己解决</div></div>
-  <div class="stat"><div class="stat-val" id="s3">-</div><div class="stat-lbl">未解决</div></div>
-  <div class="stat"><div class="stat-val" id="s4">-</div><div class="stat-lbl">平均耗时</div></div>
-  <div class="stat"><div class="stat-val" id="s5">-</div><div class="stat-lbl">最长耗时</div></div>
-  <div class="stat"><div class="stat-val" id="s6">-</div><div class="stat-lbl">分析天数</div></div>
+<!-- Tabs -->
+<div style="display:flex;gap:8px;margin-bottom:10px">
+  <button class="tab-btn active" onclick="switchTab('day')" id="tabDay">当日故障</button>
+  <button class="tab-btn" onclick="switchTab('week')" id="tabWeek">周故障分析</button>
 </div>
 
-<div class="filters">
-  <select id="fd"><option value="">全部设备</option></select>
-  <select id="ft"><option value="">全部类型</option></select>
-  <select id="fr"><option value="">全部状态</option><option value="1">已解决</option><option value="0">未解决</option></select>
-  <span class="page" id="pg"></span>
-  <button class="btn2" onclick="changePage(-1)">◀</button>
-  <button class="btn2" onclick="changePage(1)">▶</button>
+<!-- DAY VIEW -->
+<div id="viewDay">
+  <div class="stats">
+    <div class="stat"><div class="sv" id="s1">-</div><div class="sl">故障事件</div></div>
+    <div class="stat"><div class="sv" id="s2">-</div><div class="sl">已解决</div></div>
+    <div class="stat"><div class="sv" id="s3">-</div><div class="sl">未解决</div></div>
+    <div class="stat"><div class="sv" id="s4">-</div><div class="sl">平均耗时</div></div>
+    <div class="stat"><div class="sv" id="s5">-</div><div class="sl">最长耗时</div></div>
+    <div class="stat"><div class="sv" id="s6">-</div><div class="sl">分析天数</div></div>
+  </div>
+
+  <div class="row">
+    <div class="card"><h3>设备故障排行</h3><div class="chart-wrap"><canvas id="chartDev"></canvas></div></div>
+    <div class="card"><h3>错误类型分布</h3><div id="errBars"></div></div>
+  </div>
+
+  <div class="filters">
+    <select id="fd"><option value="">全部设备</option></select>
+    <select id="ft"><option value="">全部类型</option></select>
+    <select id="fr"><option value="">全部状态</option><option value="1">已解决</option><option value="0">未解决</option></select>
+    <span class="page" id="pg"></span>
+    <button class="btn2" onclick="changePage(-1)">◀</button>
+    <button class="btn2" onclick="changePage(1)">▶</button>
+  </div>
+  <table><thead><tr><th>设备</th><th>类型</th><th>日期</th><th>开始</th><th>结束</th><th>持续</th><th>重复</th><th>条码</th><th>状态</th></tr></thead><tbody id="tb"></tbody></table>
 </div>
 
-<table id="tbl">
-<thead><tr><th>设备</th><th>类型</th><th>日期</th><th>开始</th><th>结束</th><th>持续</th><th>重复</th><th>条码</th><th>状态</th></tr></thead>
-<tbody></tbody>
-</table>
+<!-- WEEK VIEW -->
+<div id="viewWeek" style="display:none">
+  <div class="msg" id="wmsg"></div>
+  <div class="row">
+    <div class="card"><h3>周设备故障排行</h3><div class="chart-wrap"><canvas id="chartWDev"></canvas></div></div>
+    <div class="card"><h3>周故障趋势</h3><div class="chart-wrap"><canvas id="chartWTrend"></canvas></div></div>
+  </div>
+  <div class="card" style="margin-bottom:10px"><h3>周错误类型分布</h3><div id="wErrBars"></div></div>
+  <table><thead><tr><th>日期</th><th>故障</th><th>已解决</th><th>未解决</th><th>平均</th><th>最长</th><th>主要故障设备</th></tr></thead><tbody id="wtb"></tbody></table>
+</div>
 
 <script>
-// ===== PARSER =====
+// ============================== PARSER ==============================
 var LINE_RE=/^([NET]):\s+(\d{2})\s+(\d{2}:\d{2}:\d{2})\.(\d+)-(.+)$/;
 var DEV_RE=/设备[：:](\w+)/;
 var DEV2_RE=/<设备[：:](\w+)/;
@@ -110,7 +140,7 @@ function parseLog(text,filename){
   return {filename:filename,date:fd,entries:entries};
 }
 
-// ===== ANALYZER =====
+// ============================== ANALYZER ==============================
 function extractIncidents(entries){
   var open={};var closed=[];
   for(var i=0;i<entries.length;i++){
@@ -120,7 +150,7 @@ function extractIncidents(entries){
       for(var k=0;k<keys.length;k++){
         var key=keys[k];var dev=key.split('|')[0];
         if(dev===e.device){
-          var inc=open[key];inc.resolved=true;inc.dur=e.ts?Math.round((new Date(e.ts)-new Date(inc.st))/1000):0;
+          var inc=open[key];inc.resolved=true;inc.dur=Math.round((new Date(e.ts)-new Date(inc.st))/1000);
           if(!inc.bc&&e.barcode)inc.bc=e.barcode;
           if(e.barcode)inc.rb=e.barcode;
           closed.push(inc);delete open[key];
@@ -158,7 +188,8 @@ function deviceRank(inc){
 function typeDist(inc){
   var map={};
   for(var i=0;i<inc.length;i++){var t=inc[i].type;map[t]=(map[t]||0)+1;}
-  return Object.keys(map).map(function(k){return{type:k,count:map[k]};}).sort(function(a,b){return b.count-a.count;});
+  var keys=Object.keys(map);
+  return keys.map(function(k){return{type:k,count:map[k],pct:(map[k]/inc.length*100).toFixed(1)};}).sort(function(a,b){return b.count-a.count;});
 }
 
 function fmtDur(sec){
@@ -167,16 +198,18 @@ function fmtDur(sec){
   return Math.floor(sec/3600)+'时'+Math.floor((sec%3600)/60)+'分';
 }
 
-// ===== STATE =====
+// ============================== STATE ==============================
 var logStore={};var currentPage=1;var PAGE_SIZE=15;
 var incidents=[],filtered=[];
+var devChart=null,wdevChart=null,wtrendChart=null;
+var currentTab='day';
 
-// ===== INIT =====
+// ============================== INIT ==============================
 document.addEventListener('DOMContentLoaded',function(){
-  document.getElementById('f').addEventListener('change',function(){
+  document.getElementById('fupload').addEventListener('change',function(){
     var files=this.files;if(!files||!files.length)return;
     document.getElementById('msg').innerHTML='解析中...';
-    var done=0;var html='';var self=this;
+    var done=0;var html='';
     for(var i=0;i<files.length;i++){
       (function(file){
         var r=new FileReader();
@@ -186,7 +219,7 @@ document.addEventListener('DOMContentLoaded',function(){
           html+='<span class="ok">'+file.name+' → '+p.entries.length+'条 / '+p.entries.filter(function(e){return e.level==='E';}).length+'错</span> ';
           done++;if(done>=files.length){document.getElementById('msg').innerHTML=html;currentPage=1;refresh();}
         };
-        r.onerror=function(){html+='<span class="fail">'+file.name+':读取失败</span> ';done++;if(done>=files.length){document.getElementById('msg').innerHTML=html;currentPage=1;refresh();}};
+        r.onerror=function(){html+='<span class="fail">'+file.name+':失败</span> ';done++;if(done>=files.length){document.getElementById('msg').innerHTML=html;currentPage=1;refresh();}};
         r.readAsText(file);
       })(files[i]);
     }
@@ -201,14 +234,28 @@ function getAllEntries(){
   return entries;
 }
 
+// ============================== TABS ==============================
+function switchTab(tab){
+  currentTab=tab;
+  document.getElementById('tabDay').className='tab-btn'+(tab==='day'?' active':'');
+  document.getElementById('tabWeek').className='tab-btn'+(tab==='week'?' active':'');
+  document.getElementById('viewDay').style.display=tab==='day'?'block':'none';
+  document.getElementById('viewWeek').style.display=tab==='week'?'block':'none';
+  if(tab==='day')refreshDay();else refreshWeek();
+}
+
+// ============================== DAY VIEW ==============================
 function refresh(){
+  if(currentTab==='day')refreshDay();else refreshWeek();
+}
+
+function refreshDay(){
   var entries=getAllEntries();
   if(!entries.length){
     document.getElementById('tag').innerHTML='无数据';
     document.getElementById('s1').innerHTML='-';document.getElementById('s2').innerHTML='-';document.getElementById('s3').innerHTML='-';
     document.getElementById('s4').innerHTML='-';document.getElementById('s5').innerHTML='-';document.getElementById('s6').innerHTML='-';
-    document.getElementById('tbl').querySelector('tbody').innerHTML='';
-    return;
+    document.getElementById('tb').innerHTML='';return;
   }
   incidents=extractIncidents(entries);
   var sum=summarize(incidents);
@@ -221,8 +268,12 @@ function refresh(){
   document.getElementById('s5').innerHTML=(sum.maxSec/60).toFixed(1)+'分';
   document.getElementById('s6').innerHTML=dates.length;
 
+  // Charts
+  var rank=deviceRank(incidents).slice(0,15);
+  renderDevChart(rank);
+  renderErrorBars('errBars',typeDist(incidents));
+
   // Filters
-  var rank=deviceRank(incidents);
   var dist=typeDist(incidents);
   var fd=document.getElementById('fd');
   fd.innerHTML='<option value="">全部设备</option>';
@@ -235,6 +286,27 @@ function refresh(){
   document.getElementById('fr').onchange=function(){currentPage=1;filterIncidents();};
 
   filterIncidents();
+}
+
+function renderDevChart(rank){
+  if(devChart){devChart.destroy();devChart=null;}
+  var ctx=document.getElementById('chartDev');if(!ctx||!rank.length)return;
+  if(typeof Chart==='undefined'){document.getElementById('chartDev').parentNode.innerHTML='<span style="color:#78809a">图表加载失败</span>';return;}
+  try{
+    devChart=new Chart(ctx,{type:'bar',data:{labels:rank.map(function(d){return d.device;}),datasets:[{data:rank.map(function(d){return d.total;}),backgroundColor:rank.map(function(_,i){return 'rgba(255,68,68,'+(1-i*0.05)+')';}),borderRadius:4}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#78809a',font:{size:10}},grid:{color:'#2a3040'}},y:{ticks:{color:'#e0e4ec',font:{size:11}},grid:{display:false}}}}});
+  }catch(e){document.getElementById('chartDev').parentNode.innerHTML='<span style="color:#f44">图表错误: '+e.message+'</span>';}
+}
+
+function renderErrorBars(id,dist){
+  var c=document.getElementById(id);if(!c||!dist.length)return;
+  var colors=['#f44','#fa3','#f97316','#59f','#0c8','#a78bfa','#78809a'];
+  var max=dist[0].count;
+  var html='';
+  for(var i=0;i<Math.min(dist.length,15);i++){
+    var d=dist[i];
+    html+='<div class="eb-row"><span class="eb-label" title="'+d.type+'">'+d.type+'</span><div class="eb-track"><div class="eb-fill" style="width:'+Math.round(d.count/max*100)+'%;background:'+colors[i%7]+'"></div></div><span class="eb-count">'+d.count+'</span><span class="eb-pct">'+d.pct+'%</span></div>';
+  }
+  c.innerHTML=html;
 }
 
 function filterIncidents(){
@@ -252,24 +324,13 @@ function filterIncidents(){
   }
   var start=(currentPage-1)*PAGE_SIZE;
   var items=filtered.slice(start,start+PAGE_SIZE);
-  var tbody=document.getElementById('tbl').querySelector('tbody');
+  var tbody=document.getElementById('tb');
   if(!items.length){tbody.innerHTML='<tr><td colspan="9" style="color:#78809a;text-align:center;padding:20px">无匹配</td></tr>';}
   else{
     tbody.innerHTML='';
     for(var i=0;i<items.length;i++){
       var inc=items[i];
-      var row='<tr>';
-      row+='<td><strong>'+inc.device+'</strong></td>';
-      row+='<td>'+inc.type+'</td>';
-      row+='<td>'+inc.date+'</td>';
-      row+='<td>'+inc.st.slice(11,19)+'</td>';
-      row+='<td>'+inc.et.slice(11,19)+'</td>';
-      row+='<td>'+fmtDur(inc.dur)+'</td>';
-      row+='<td>'+inc.rc+'</td>';
-      row+='<td>'+(inc.rb||inc.bc||'-')+'</td>';
-      row+='<td class="'+(inc.resolved?'badge-ok':'badge-no')+'">'+(inc.resolved?'已解决':'未解决')+'</td>';
-      row+='</tr>';
-      tbody.innerHTML+=row;
+      tbody.innerHTML+='<tr><td><strong>'+inc.device+'</strong></td><td>'+inc.type+'</td><td>'+inc.date+'</td><td>'+inc.st.slice(11,19)+'</td><td>'+inc.et.slice(11,19)+'</td><td>'+fmtDur(inc.dur)+'</td><td>'+inc.rc+'</td><td>'+(inc.rb||inc.bc||'-')+'</td><td class="'+(inc.resolved?'badge-ok':'badge-no')+'">'+(inc.resolved?'已解决':'未解决')+'</td></tr>';
     }
   }
   var totalPages=Math.ceil(filtered.length/PAGE_SIZE)||1;
@@ -278,9 +339,72 @@ function filterIncidents(){
 
 function changePage(d){currentPage=Math.max(1,currentPage+d);filterIncidents();}
 
+// ============================== WEEK VIEW ==============================
+function refreshWeek(){
+  var dates=Object.keys(logStore).sort();
+  if(!dates.length){document.getElementById('wtb').innerHTML='<tr><td colspan="7" style="color:#78809a;text-align:center;padding:20px">无数据</td></tr>';return;}
+  var dailyData=[];
+  for(var i=0;i<dates.length;i++){
+    var entries=logStore[dates[i]].entries;
+    var inc=extractIncidents(entries);
+    var sum=summarize(inc);
+    var rank=deviceRank(inc);
+    var tops=[];
+    for(var j=0;j<Math.min(5,rank.length);j++){tops.push(rank[j].device+'('+rank[j].total+')');}
+    dailyData.push({date:dates[i],total:inc.length,resolved:sum.resolved,unresolved:sum.unresolved,avg:(sum.avgSec/60).toFixed(1),max:(sum.maxSec/60).toFixed(1),tops:tops.join(', ')});
+  }
+
+  // Week summary
+  var allEntries=getAllEntries();
+  var allInc=extractIncidents(allEntries);
+  var allSum=summarize(allInc);
+  document.getElementById('wmsg').innerHTML='<span class="ok">共'+allInc.length+'条故障 · 已解决'+allSum.resolved+' · 平均'+(allSum.avgSec/60).toFixed(1)+'分 · 最长'+(allSum.maxSec/60).toFixed(1)+'分</span>';
+
+  // Week device chart
+  var wrank=deviceRank(allInc).slice(0,15);
+  renderWDevChart(wrank);
+
+  // Week error bars
+  renderErrorBars('wErrBars',typeDist(allInc));
+
+  // Trend chart
+  renderWTrend(dailyData);
+
+  // Table
+  var tbody=document.getElementById('wtb');
+  tbody.innerHTML='';
+  for(var i=0;i<dailyData.length;i++){
+    var d=dailyData[i];
+    tbody.innerHTML+='<tr><td><strong>'+d.date+'</strong></td><td>'+d.total+'</td><td style="color:#0c8">'+d.resolved+'</td><td style="color:#f44">'+d.unresolved+'</td><td>'+d.avg+'分</td><td>'+d.max+'分</td><td>'+d.tops+'</td></tr>';
+  }
+}
+
+function renderWDevChart(rank){
+  if(wdevChart){wdevChart.destroy();wdevChart=null;}
+  var ctx=document.getElementById('chartWDev');if(!ctx||!rank.length)return;
+  if(typeof Chart==='undefined')return;
+  try{
+    wdevChart=new Chart(ctx,{type:'bar',data:{labels:rank.map(function(d){return d.device;}),datasets:[{data:rank.map(function(d){return d.total;}),backgroundColor:rank.map(function(_,i){return 'rgba(255,68,68,'+(1-i*0.05)+')';}),borderRadius:4}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#78809a',font:{size:10}},grid:{color:'#2a3040'}},y:{ticks:{color:'#e0e4ec',font:{size:11}},grid:{display:false}}}}});
+  }catch(e){}
+}
+
+function renderWTrend(dailyData){
+  if(wtrendChart){wtrendChart.destroy();wtrendChart=null;}
+  var ctx=document.getElementById('chartWTrend');if(!ctx||!dailyData.length)return;
+  if(typeof Chart==='undefined')return;
+  try{
+    wtrendChart=new Chart(ctx,{type:'bar',data:{labels:dailyData.map(function(d){return d.date.slice(5);}),datasets:[{label:'故障',data:dailyData.map(function(d){return d.total;}),backgroundColor:'rgba(244,68,68,0.7)',borderRadius:4},{label:'己解决',data:dailyData.map(function(d){return d.resolved;}),backgroundColor:'rgba(0,200,150,0.7)',borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#e0e4ec',font:{size:11}}}},scales:{x:{ticks:{color:'#78809a'},grid:{display:false}},y:{ticks:{color:'#78809a'},grid:{color:'#2a3040'}}}}});
+  }catch(e){}
+}
+
+// ============================== CLEAR / EXPORT ==============================
 function clearAll(){
   if(!confirm('确定清除所有数据？'))return;
-  logStore={};incidents=[];filtered=[];currentPage=1;refresh();
+  logStore={};incidents=[];filtered=[];currentPage=1;
+  if(devChart){devChart.destroy();devChart=null;}
+  if(wdevChart){wdevChart.destroy();wdevChart=null;}
+  if(wtrendChart){wtrendChart.destroy();wtrendChart=null;}
+  refresh();
 }
 
 function exportCSV(){
