@@ -392,11 +392,7 @@ function renderDevChart(rank){
   }
 
   // Labels: device + top type
-  var labels=rank.map(function(d){
-    var tops=Object.entries(d.types).sort(function(a,b){return b[1]-a[1];}).slice(0,2);
-    var extra=tops.map(function(t){return t[0]+'('+t[1]+')';}).join(' ');
-    return d.device+' | '+extra;
-  });
+  var labels=rank.map(function(d){return d.device;});
 
   try{
     devChart=new Chart(ctx,{
