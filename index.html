@@ -351,9 +351,12 @@ function resetUI() {
 }
 
 function renderDeviceChart(rank) {
+  if(typeof Chart==='undefined')return;
+  try{
   if(chart)chart.destroy();
   const ctx=document.getElementById('chartDevice'); if(!ctx||!rank.length)return;
   chart=new Chart(ctx,{type:'bar',data:{labels:rank.map(d=>d.device),datasets:[{label:'故障事件',data:rank.map(d=>d.totalIncidents),backgroundColor:rank.map((_,i)=>`rgba(255,68,68,${1-i*0.05})`),borderRadius:4}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>'故障: '+ctx.raw,afterLabel:ctx=>{const d=rank[ctx.dataIndex];if(!d?.topTypes)return'';return d.topTypes.map(t=>'  '+t.type+': '+t.count+'次').join('\n');}}}}},scales:{x:{ticks:{color:'#78809a',font:{size:10}},grid:{color:'#2a3040'}},y:{ticks:{color:'#e0e4ec',font:{size:11}},grid:{display:false}}}}});
+  }catch(e){}
 }
 
 function renderErrorBars(id,dist) {
@@ -421,7 +424,7 @@ function loadWeekView() {
   // Device chart
   if(weekCharts.device)weekCharts.device.destroy();
   const ctx=document.getElementById('chartWeekDevice');
-  if(ctx&&weekDeviceRank.length){weekCharts.device=new Chart(ctx,{type:'bar',data:{labels:weekDeviceRank.map(d=>d.device),datasets:[{data:weekDeviceRank.map(d=>d.totalIncidents),backgroundColor:weekDeviceRank.map((_,i)=>`rgba(255,68,68,${1-i*0.05})`),borderRadius:4}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#78809a',font:{size:10}},grid:{color:'#2a3040'}},y:{ticks:{color:'#e0e4ec',font:{size:11}},grid:{display:false}}}}});}
+  if(ctx&&weekDeviceRank.length&&typeof Chart!=='undefined'){try{weekCharts.device=new Chart(ctx,{type:'bar',data:{labels:weekDeviceRank.map(d=>d.device),datasets:[{data:weekDeviceRank.map(d=>d.totalIncidents),backgroundColor:weekDeviceRank.map((_,i)=>`rgba(255,68,68,${1-i*0.05})`),borderRadius:4}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#78809a',font:{size:10}},grid:{color:'#2a3040'}},y:{ticks:{color:'#e0e4ec',font:{size:11}},grid:{display:false}}}}});}catch(e){}}
 
   // Error bars
   renderErrorBars('weekErrorBars',weekErrorDist);
@@ -429,12 +432,12 @@ function loadWeekView() {
   // Trend
   if(weekCharts.trend)weekCharts.trend.destroy();
   const ct=document.getElementById('chartWeekTrend');
-  if(ct){weekCharts.trend=new Chart(ct,{type:'bar',data:{labels:dailyData.map(d=>d.date.slice(5)),datasets:[{label:'故障事件',data:dailyData.map(d=>d.totalIncidents),backgroundColor:'rgba(244,68,68,0.7)',borderRadius:4},{label:'已解决',data:dailyData.map(d=>d.resolved),backgroundColor:'rgba(0,200,150,0.7)',borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#e0e4ec',font:{size:11}}}},scales:{x:{ticks:{color:'#78809a'},grid:{display:false}},y:{ticks:{color:'#78809a'},grid:{color:'#2a3040'}}}}});}
+  if(ct&&typeof Chart!=='undefined'){try{weekCharts.trend=new Chart(ct,{type:'bar',data:{labels:dailyData.map(d=>d.date.slice(5)),datasets:[{label:'故障事件',data:dailyData.map(d=>d.totalIncidents),backgroundColor:'rgba(244,68,68,0.7)',borderRadius:4},{label:'已解决',data:dailyData.map(d=>d.resolved),backgroundColor:'rgba(0,200,150,0.7)',borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#e0e4ec',font:{size:11}}}},scales:{x:{ticks:{color:'#78809a'},grid:{display:false}},y:{ticks:{color:'#78809a'},grid:{color:'#2a3040'}}}}});}catch(e){}}
 
   // MTTR
   if(weekCharts.mttr)weekCharts.mttr.destroy();
   const cm=document.getElementById('chartWeekMTTR');
-  if(cm){weekCharts.mttr=new Chart(cm,{type:'line',data:{labels:dailyData.map(d=>d.date.slice(5)),datasets:[{label:'平均MTTR(分)',data:dailyData.map(d=>Number(d.avgMin)||0),borderColor:'#f5a623',backgroundColor:'rgba(245,166,35,0.1)',borderWidth:2,pointRadius:4,tension:0.3},{label:'最长MTTR(分)',data:dailyData.map(d=>Number(d.maxMin)||0),borderColor:'#f44',backgroundColor:'rgba(244,68,68,0.1)',borderWidth:2,pointRadius:4,tension:0.3,borderDash:[5,5]}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#e0e4ec',font:{size:11}}}},scales:{x:{ticks:{color:'#78809a'},grid:{display:false}},y:{ticks:{color:'#78809a'},grid:{color:'#2a3040'},title:{text:'分钟',display:true,color:'#78809a'}}}});}
+  if(cm&&typeof Chart!=='undefined'){try{weekCharts.mttr=new Chart(cm,{type:'line',data:{labels:dailyData.map(d=>d.date.slice(5)),datasets:[{label:'平均MTTR(分)',data:dailyData.map(d=>Number(d.avgMin)||0),borderColor:'#f5a623',backgroundColor:'rgba(245,166,35,0.1)',borderWidth:2,pointRadius:4,tension:0.3},{label:'最长MTTR(分)',data:dailyData.map(d=>Number(d.maxMin)||0),borderColor:'#f44',backgroundColor:'rgba(244,68,68,0.1)',borderWidth:2,pointRadius:4,tension:0.3,borderDash:[5,5]}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#e0e4ec',font:{size:11}}}},scales:{x:{ticks:{color:'#78809a'},grid:{display:false}},y:{ticks:{color:'#78809a'},grid:{color:'#2a3040'},title:{text:'分钟',display:true,color:'#78809a'}}}});}catch(e){}}
 
   // Table
   document.querySelector('#weekTable tbody').innerHTML=dailyData.map(d=>`<tr><td><strong>${d.date}</strong></td><td>${d.totalIncidents}</td><td style="color:var(--green)">${d.resolved}</td><td style="color:var(--red)">${d.unresolved}</td><td>${d.avgMin}分</td><td>${d.maxMin}分</td><td>${d.topDevices.map(dv=>dv.device+'('+dv.count+')').join(', ')}</td></tr>`).join('');
