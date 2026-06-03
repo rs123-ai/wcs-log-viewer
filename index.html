@@ -67,8 +67,8 @@ header h1{font-size:18px}
 <header>
   <div class="header-left"><h1> WCS 仓储设备日志分析</h1><span id="statusTag" class="tag">无数据</span></div>
   <div class="header-actions">
-    <input type="file" id="fileInput" multiple accept=".log,.txt" hidden>
-    <button class="btn" onclick="document.getElementById('fileInput').click()"> 上传日志</button>
+    <input type="file" id="fileInput" multiple accept=".log,.txt" style="display:none">
+    <label class="btn" for="fileInput"> 上传日志</label>
     <button class="btn btn-outline" onclick="clearAll()"> 清除</button>
     <button class="btn btn-outline" onclick="exportCSV()"> 导出</button>
   </div>
@@ -273,8 +273,7 @@ function setupUpload() {
 }
 
 function handleFiles(fileList) {
-  alert('GOT '+ (fileList?fileList.length:0) +' files');
-  if (!fileList||!fileList.length){alert('NO FILE');return;}
+  if (!fileList||!fileList.length) return;
   const msg=document.getElementById('uploadMsg'); msg.style.display='block'; msg.innerHTML='解析中...';
   let html=''; let done=0; const total=fileList.length;
   for(let i=0;i<total;i++){
@@ -282,7 +281,6 @@ function handleFiles(fileList) {
     reader.onload=function(){
       try{
         const parsed=parseLog(reader.result,f.name);
-        alert('Parsed: '+parsed.entries.length+' entries, '+parsed.entries.filter(function(e){return e.level==='error'}).length+' errors');
         logStore.set(parsed.date,parsed);
         html+='<span class="ok">'+f.name+' → '+parsed.entries.length+'条 / '+parsed.entries.filter(function(e){return e.level==='error'}).length+'错</span> ';
       }catch(e){html+='<span class="fail">'+f.name+':解析错误 '+e.message+'</span> ';}
@@ -293,7 +291,6 @@ function handleFiles(fileList) {
   }
   function finish(){
     msg.innerHTML=html||'无文件';
-    alert('Store size: '+logStore.size+', entries: '+getAllEntries().length);
     saveStore(); currentPage=1; refreshAll();
   }
 }
@@ -325,7 +322,6 @@ function loadDates() {
 // ==================== DAY VIEW ====================
 function refreshDayView() {
   const entries=getAllEntries();
-  alert('refreshDayView: '+entries.length+' entries, logStore size: '+logStore.size);
   if(!entries.length){resetUI();return;}
   const incidents=extractIncidents(entries);
   const summary=incidentSummary(incidents);
