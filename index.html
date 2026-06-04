@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>WCS 日志分析</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 <style>
 body{font:14px/1.5 -apple-system,"Microsoft YaHei",sans-serif;background:#11141b;color:#e0e4ec;margin:0;padding:16px 24px}
 h1{font-size:18px;margin:0}
@@ -235,52 +236,40 @@ var currentTab='day';var activeDate='';
 var weekIncidents=[],weekFiltered=[],weekPage=1;
 var shared=false;
 
-// ============================== STORAGE ==============================
-function saveData(){
-  try{
-    var save={};
-    var dates=Object.keys(logStore);
-    for(var i=0;i<dates.length;i++){save[dates[i]]=logStore[dates[i]];}
-    sessionStorage.setItem('wcs_data',JSON.stringify(save));
-  }catch(e){}
+// ============================== IndexedDB STORAGE ==============================
+var db=null;
+function openDB(cb){
+  var req=indexedDB.open('wcs_logs',1);
+  req.onupgradeneeded=function(e){var d=e.target.result;if(!d.objectStoreNames.contains('logs'))d.createObjectStore('logs',{keyPath:'date'});};
+  req.onsuccess=function(e){db=e.target.result;loadFromDB(cb);};
+  req.onerror=function(){if(cb)cb();};
 }
-function loadData(){
+
+function saveToDB(date,data){
+  if(!db)return;
+  try{var tx=db.transaction('logs','readwrite');var store=tx.objectStore('logs');store.put({date:date,filename:data.filename,entries:data.entries});}catch(e){}
+}
+
+function loadFromDB(cb){
+  if(!db){if(cb)cb();return;}
   try{
-    var raw=sessionStorage.getItem('wcs_data');
-    if(!raw)return;
-    var data=JSON.parse(raw);var keys=Object.keys(data);
-    for(var i=0;i<keys.length;i++){
-      var d=data[keys[i]];
-      // entries need time as Date
-      for(var j=0;j<d.entries.length;j++){
-        var e=d.entries[j];e.time=new Date(e.ts);
-      }
-      logStore[keys[i]]=d;
-    }
-  }catch(e){}
+    var tx=db.transaction('logs','readonly');var store=tx.objectStore('logs');var req=store.getAll();
+    req.onsuccess=function(){
+      var items=req.result;for(var i=0;i<items.length;i++){var item=items[i];logStore[item.date]=item;}
+      if(cb)cb();
+    };
+    req.onerror=function(){if(cb)cb();};
+  }catch(e){if(cb)cb();}
+}
+
+function clearDB(cb){
+  if(!db){if(cb)cb();return;}
+  try{var tx=db.transaction('logs','readwrite');var store=tx.objectStore('logs');store.clear();if(cb)tx.oncomplete=cb;}catch(e){if(cb)cb();}
 }
 
 // ============================== INIT ==============================
 document.addEventListener('DOMContentLoaded',function(){
-  // Try server first, fall back to local
-  fetch('/api/dates').then(function(r){return r.json();}).then(function(){
-    shared=true;
-    setupSharedUpload();
-    loadShared();
-  }).catch(function(){
-    shared=false;loadData();
-    setupLocalUpload();
-    renderDateTabs();refreshDay();
-  });
-});
-
-function setupSharedUpload(){
-  document.getElementById('fupload').addEventListener('change',function(){
-    uploadShared(this);
-  });
-}
-
-function setupLocalUpload(){
+  // Set up upload handler
   document.getElementById('fupload').addEventListener('change',function(){
     var files=this.files;if(!files||!files.length)return;
     document.getElementById('msg').innerHTML='解析中...';
@@ -291,15 +280,21 @@ function setupLocalUpload(){
         r.onload=function(){
           var p=parseLog(r.result,file.name);
           logStore[p.date]=p;
+          saveToDB(p.date,p);
           html+='<span class="ok">'+file.name+' → '+p.entries.length+'条 / '+p.entries.filter(function(e){return e.level==='E';}).length+'错</span> ';
-          done++;if(done>=files.length){document.getElementById('msg').innerHTML=html;currentPage=1;saveData();refresh();}
+          done++;if(done>=files.length){document.getElementById('msg').innerHTML=html;currentPage=1;refresh();}
         };
-        r.onerror=function(){html+='<span class="fail">'+file.name+':失败</span> ';done++;if(done>=files.length){document.getElementById('msg').innerHTML=html;currentPage=1;saveData();refresh();}};
+        r.onerror=function(){html+='<span class="fail">'+file.name+':失败</span> ';done++;if(done>=files.length){document.getElementById('msg').innerHTML=html;currentPage=1;refresh();}};
         r.readAsText(file);
       })(files[i]);
     }
   });
-}
+
+  // Init: open IndexedDB → render
+  openDB(function(){
+    renderDateTabs();refreshDay();
+  });
+});
 
 // ===== SHARED MODE =====
 function uploadShared(input){
@@ -697,7 +692,7 @@ function clearAll(){
   if(devChart){devChart.destroy();devChart=null;}
   if(wdevChart){wdevChart.destroy();wdevChart=null;}
   if(wtrendChart){wtrendChart.destroy();wtrendChart=null;}
-  sessionStorage.removeItem('wcs_data');renderDateTabs();refreshDay();
+  clearDB(function(){renderDateTabs();refreshDay();});
 }
 
 function exportCSV(){
