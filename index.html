@@ -1,9 +1,15 @@
-<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>WCS 日志分析</title>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WCS 日志分析</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 <style>
 body{font:14px/1.5 -apple-system,"Microsoft YaHei",sans-serif;background:#11141b;color:#e0e4ec;margin:0;padding:16px 24px}
-h1{font-size:18px;margin:0}.row{display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+h1{font-size:18px;margin:0}
+.row{display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap}
 .card{background:#1a1e28;border-radius:8px;padding:12px;flex:1;min-width:300px}
 .card h3{font-size:13px;margin:0 0 8px 0}
 .stats{display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap}
@@ -11,7 +17,8 @@ h1{font-size:18px;margin:0}.row{display:flex;gap:10px;margin-bottom:10px;flex-wr
 .stat:nth-child(2){border-top-color:#f44}.stat:nth-child(3){border-top-color:#0c8}.stat:nth-child(4){border-top-color:#fa3}.stat:nth-child(5){border-top-color:#a78bfa}.stat:nth-child(6){border-top-color:#f97316}
 .sv{font-size:18px;font-weight:700}.sl{font-size:10px;color:#78809a}
 .btn{padding:7px 14px;border:1px solid #59f;border-radius:5px;background:#59f;color:#fff;cursor:pointer;font-size:13px;font-family:inherit;white-space:nowrap}
-.btn2{padding:7px 14px;border:1px solid #2a3040;border-radius:5px;background:transparent;color:#78809a;cursor:pointer;font-size:13px;font-family:inherit}.btn2:hover{color:#e0e4ec}
+.btn2{padding:7px 14px;border:1px solid #2a3040;border-radius:5px;background:transparent;color:#78809a;cursor:pointer;font-size:13px;font-family:inherit}
+.btn2:hover{color:#e0e4ec}
 table{width:100%;border-collapse:collapse;font-size:13px}
 th{background:#252a38;padding:9px 12px;text-align:left;color:#78809a;white-space:nowrap}
 td{padding:7px 12px;border-bottom:1px solid #2a3040;white-space:nowrap}
@@ -24,51 +31,47 @@ input[type=file]::file-selector-button{display:none}
 .page{font-size:12px;color:#78809a}
 .eb-row{display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:4px}
 .eb-label{width:90px;text-align:right;color:#78809a;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.eb-track{flex:1;height:16px;background:#252a38;border-radius:3px;overflow:hidden}.eb-fill{height:100%;border-radius:3px}
-.eb-count{width:45px;text-align:right;font-weight:600;flex-shrink:0}.eb-pct{width:36px;text-align:right;color:#78809a;font-size:11px;flex-shrink:0}
-.chart-wrap{position:relative;height:300px}.chart-wrap canvas{height:300px!important}
-.tab-btn{padding:8px 16px;border:1px solid #2a3040;border-radius:6px;background:transparent;color:#78809a;cursor:pointer;font-size:13px;font-family:inherit}.tab-btn.active{background:#59f;border-color:#59f;color:#fff}
-.modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:1000;justify-content:center;align-items:center}
-.modal-overlay.show{display:flex}
-.modal{background:#1a1e28;padding:24px;border-radius:12px;text-align:center;min-width:320px}
-.modal input{padding:8px 14px;background:#252a38;border:1px solid #2a3040;border-radius:6px;color:#e0e4ec;font-size:14px;width:260px;margin:8px 0;text-align:center}
-</style></head><body>
-
-<!-- Setup Modal -->
-<div class="modal-overlay" id="modalOverlay"><div class="modal">
-  <h3>配置数据共享</h3>
-  <p style="font-size:12px;color:#78809a;margin:4px 0">输入 MQTT Broker 地址以启用多设备数据同步</p>
-  <input type="text" id="brokerInput" placeholder="wss://broker.emqx.io:8084/mqtt"><br>
-  <input type="text" id="nickInput" placeholder="你的昵称" maxlength="20"><br>
-  <p style="font-size:11px;color:#78809a">留空 Broker 则使用离线模式（数据仅存本机）</p>
-  <button class="btn" onclick="saveSetup()" style="margin-right:8px">确认</button>
-  <button class="btn2" onclick="skipSetup()">跳过，离线使用</button>
-</div></div>
+.eb-track{flex:1;height:16px;background:#252a38;border-radius:3px;overflow:hidden}
+.eb-fill{height:100%;border-radius:3px}
+.eb-count{width:45px;text-align:right;font-weight:600;flex-shrink:0}
+.eb-pct{width:36px;text-align:right;color:#78809a;font-size:11px;flex-shrink:0}
+.chart-wrap{position:relative;height:300px}
+.chart-wrap canvas{height:300px !important}
+.tab-btn{padding:8px 16px;border:1px solid #2a3040;border-radius:6px;background:transparent;color:#78809a;cursor:pointer;font-size:13px;font-family:inherit}
+.tab-btn.active{background:#59f;border-color:#59f;color:#fff}
+.dtabs{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.dtab{padding:5px 14px;border:1px solid #2a3040;border-radius:16px;background:transparent;color:#78809a;cursor:pointer;font-size:12px;font-family:inherit;white-space:nowrap}
+.dtab:hover{border-color:#78809a;color:#e0e4ec}
+.dtab.active{background:#252a38;border-color:#59f;color:#59f}
+.dtab .de{font-size:10px;color:#f44;margin-left:4px}
+</style>
+</head>
+<body>
 
 <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:12px;border-bottom:1px solid #2a3040;margin-bottom:12px">
-  <div style="display:flex;align-items:center;gap:10px">
-    <h1>WCS 仓储设备日志分析</h1>
-    <span class="sl" id="tag">离线</span>
-    <span id="peerCount" style="font-size:11px;color:#0c8;display:none"></span>
-  </div>
+  <div style="display:flex;align-items:center;gap:10px"><h1>WCS 仓储设备日志分析</h1><span class="sl" id="tag">无数据</span></div>
   <div style="display:flex;gap:8px">
     <input type="file" id="fupload" multiple accept=".log,.txt">
     <button class="btn2" onclick="clearAll()">清除</button>
     <button class="btn2" onclick="exportCSV()">导出</button>
-    <button class="btn2" id="btnCfg" onclick="reopenSetup()" title="设置">⚙</button>
   </div>
 </div>
 <div class="msg" id="msg"></div>
+
+<!-- Date selector -->
 <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
   <span style="font-size:13px;color:#78809a">选择日期：</span>
   <select id="dsel" style="padding:6px 12px;background:#252a38;border:1px solid #2a3040;border-radius:6px;color:#e0e4ec;font-size:13px;font-family:inherit;min-width:200px" onchange="selectDate(this.value)"></select>
   <button id="btnDelDate" class="btn2" style="display:none" onclick="deleteCurrentDate()">删除此日期</button>
 </div>
+
+<!-- Tabs -->
 <div style="display:flex;gap:8px;margin-bottom:10px">
   <button class="tab-btn active" onclick="switchTab('day')" id="tabDay">当日故障</button>
   <button class="tab-btn" onclick="switchTab('week')" id="tabWeek">周故障分析</button>
 </div>
 
+<!-- DAY VIEW -->
 <div id="viewDay">
   <div class="stats">
     <div class="stat"><div class="sv" id="s1">-</div><div class="sl">故障事件</div></div>
@@ -78,10 +81,12 @@ input[type=file]::file-selector-button{display:none}
     <div class="stat"><div class="sv" id="s5">-</div><div class="sl">最长耗时</div></div>
     <div class="stat"><div class="sv" id="s6">-</div><div class="sl">分析天数</div></div>
   </div>
+
   <div class="row">
     <div class="card"><h3>设备故障排行</h3><div class="chart-wrap"><canvas id="chartDev"></canvas></div></div>
     <div class="card"><h3>错误类型分布</h3><div id="errBars"></div></div>
   </div>
+
   <div class="filters">
     <select id="fd"><option value="">全部设备</option></select>
     <select id="ft"><option value="">全部类型</option></select>
@@ -93,6 +98,7 @@ input[type=file]::file-selector-button{display:none}
   <table><thead><tr><th>设备</th><th>类型</th><th>日期</th><th>开始</th><th>结束</th><th>持续</th><th>重复</th><th>条码</th><th>状态</th></tr></thead><tbody id="tb"></tbody></table>
 </div>
 
+<!-- WEEK VIEW -->
 <div id="viewWeek" style="display:none">
   <div class="msg" id="wmsg"></div>
   <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
@@ -107,6 +113,7 @@ input[type=file]::file-selector-button{display:none}
   </div>
   <div class="card" style="margin-bottom:10px"><h3>周错误类型分布</h3><div id="wErrBars"></div></div>
   <table><thead><tr><th>日期</th><th>故障</th><th>已解决</th><th>未解决</th><th>平均</th><th>最长</th><th>主要故障设备</th></tr></thead><tbody id="wtb"></tbody></table>
+
   <h3 style="margin:14px 0 8px 0">周故障事件列表</h3>
   <div class="filters">
     <select id="wfd"><option value="">全部设备</option></select>
@@ -120,19 +127,24 @@ input[type=file]::file-selector-button{display:none}
 </div>
 
 <script>
-// ========================================== PARSER ==========================================
+// ============================== PARSER ==============================
 var LINE_RE=/^([NET]):\s+(\d{2})\s+(\d{2}:\d{2}:\d{2})\.(\d+)-(.+)$/;
-var DEV_RE=/设备[：:](\w+)/;var DEV2_RE=/<设备[：:](\w+)/;
-var BC_RE=/报错[：:]\s*(.+?)(?:$|[,;，；])/;var NR_RE=/错误条码\s*NOREAD/i;
-var WM_RE=/等待WMS回复入库货位/;var TF_RE=/任务写入(\d*)次?失败/;
-var YC_RE=/异常[：:]\s*(.+?)(?:$|[,;，；])/;var BC2_RE=/条码[：:]\s*(\w+)/;
+var DEV_RE=/设备[：:](\w+)/;
+var DEV2_RE=/<设备[：:](\w+)/;
+var BC_RE=/报错[：:]\s*(.+?)(?:$|[,;，；])/;
+var NR_RE=/错误条码\s*NOREAD/i;
+var WM_RE=/等待WMS回复入库货位/;
+var TF_RE=/任务写入(\d*)次?失败/;
+var YC_RE=/异常[：:]\s*(.+?)(?:$|[,;，；])/;
+var BC2_RE=/条码[：:]\s*(\w+)/;
 
 function parseLine(line,fd){
   var m=line.match(LINE_RE);if(!m)return null;
   var l=m[1],t=m[3],ms=m[4],msg=m[5];
   var hh=t.split(':').map(Number);
   var ts=fd+'T'+String(hh[0]).padStart(2,'0')+':'+String(hh[1]).padStart(2,'0')+':'+String(hh[2]).padStart(2,'0')+'.'+ms;
-  var dev=null;var dm=msg.match(DEV_RE);var dm2=msg.match(DEV2_RE);
+  var dev=null;
+  var dm=msg.match(DEV_RE);var dm2=msg.match(DEV2_RE);
   if(dm)dev=dm[1];else if(dm2)dev=dm2[1];
   var al=l;if(l==='E'&&WM_RE.test(msg))al='N';
   var et=null;
@@ -141,11 +153,12 @@ function parseLine(line,fd){
     if(bc)et=bc[1].trim();
     else if(NR_RE.test(msg))et='NOREAD';
     else if(TF_RE.test(msg))et='任务写入失败';
-    else if(yc){var y=yc[1].trim();var o=y.match(/ORA-\d+/);et=o?o[0]:y.substring(0,40);}
+    else if(yc){var y=yc[1].trim();var o=y.match(/ORA-\d+/);et=o?o[0]:y.substring(0,40)}
     else if(msg.indexOf('错误')>=0||msg.indexOf('故障')>=0)et='其他';
     else et='未分类';
   }
-  var barcode=null;var bm=msg.match(BC2_RE);if(bm)barcode=bm[1];
+  var barcode=null;
+  var bm=msg.match(BC2_RE);if(bm)barcode=bm[1];
   return {ts:ts,date:fd,device:dev,level:al,type:et,barcode:barcode,msg:msg.substring(0,200)};
 }
 
@@ -157,18 +170,19 @@ function parseLog(text,filename){
   return {filename:filename,date:fd,entries:entries};
 }
 
-// ========================================== ANALYZER ==========================================
+// ============================== ANALYZER ==============================
 function extractIncidents(entries){
   var open={};var closed=[];
   for(var i=0;i<entries.length;i++){
-    var e=entries[i];var ts=e.ts;
+    var e=entries[i];
     if((e.level==='N'||e.level==='T')&&e.device){
       var keys=Object.keys(open);
       for(var k=0;k<keys.length;k++){
         var key=keys[k];var dev=key.split('|')[0];
         if(dev===e.device){
-          var inc=open[key];inc.resolved=true;inc.dur=Math.round((new Date(ts)-new Date(inc.st))/1000);
-          if(!inc.bc&&e.barcode)inc.bc=e.barcode;if(e.barcode)inc.rb=e.barcode;
+          var inc=open[key];inc.resolved=true;inc.dur=Math.round((new Date(e.ts)-new Date(inc.st))/1000);
+          if(!inc.bc&&e.barcode)inc.bc=e.barcode;
+          if(e.barcode)inc.rb=e.barcode;
           closed.push(inc);delete open[key];
         }
       }
@@ -176,8 +190,8 @@ function extractIncidents(entries){
     }
     if(e.level!=='E'||!e.device)continue;
     var key=e.device+'|'+(e.type||'未分类');
-    if(open[key]){open[key].et=ts;open[key].rc++;}
-    else open[key]={device:e.device,type:e.type||'未分类',st:ts,et:ts,date:e.date,bc:e.barcode,rb:null,rc:1,resolved:false,dur:0};
+    if(open[key]){open[key].et=e.ts;open[key].rc++;}
+    else open[key]={device:e.device,type:e.type||'未分类',st:e.ts,et:e.ts,date:e.date,bc:e.barcode,rb:null,rc:1,resolved:false,dur:0};
   }
   var okeys=Object.keys(open);
   for(var i=0;i<okeys.length;i++){var inc=open[okeys[i]];inc.dur=Math.round((new Date(inc.et)-new Date(inc.st))/1000);closed.push(inc);}
@@ -194,7 +208,10 @@ function summarize(inc){
 
 function deviceRank(inc){
   var map={};
-  for(var i=0;i<inc.length;i++){var dev=inc[i].device;if(!map[dev])map[dev]={device:dev,total:0,types:{}};map[dev].total++;map[dev].types[inc[i].type]=(map[dev].types[inc[i].type]||0)+1;}
+  for(var i=0;i<inc.length;i++){
+    var dev=inc[i].device;if(!map[dev])map[dev]={device:dev,total:0,types:{}};
+    map[dev].total++;map[dev].types[inc[i].type]=(map[dev].types[inc[i].type]||0)+1;
+  }
   return Object.values(map).sort(function(a,b){return b.total-a.total;});
 }
 
@@ -206,213 +223,53 @@ function typeDist(inc){
 }
 
 function fmtDur(sec){
-  if(sec<60)return sec+'秒';if(sec<3600)return Math.floor(sec/60)+'分'+sec%60+'秒';
+  if(sec<60)return sec+'秒';
+  if(sec<3600)return Math.floor(sec/60)+'分'+sec%60+'秒';
   return Math.floor(sec/3600)+'时'+Math.floor((sec%3600)/60)+'分';
 }
 
-// ========================================== IDENTITY + SETUP ==========================================
-var myUID='';var myName='';var myBroker='';
-var brokerList=[];var currentBroker=0;
-
-function getSetup(){
-  myUID=localStorage.getItem('wcs_uid');
-  myName=localStorage.getItem('wcs_name')||'';
-  myBroker=localStorage.getItem('wcs_broker')||'';
-  if(!myUID){myUID='u'+Date.now()+'_'+Math.random().toString(36).substring(2,8);localStorage.setItem('wcs_uid',myUID);}
-  if(!myName||!localStorage.getItem('wcs_name')){
-    document.getElementById('modalOverlay').classList.add('show');
-    document.getElementById('nickInput').focus();
-    document.getElementById('brokerInput').value=myBroker||'wss://broker.emqx.io:8084/mqtt';
-  }else{startApp();}
-}
-
-function saveSetup(){
-  var name=document.getElementById('nickInput').value.trim();
-  var brk=document.getElementById('brokerInput').value.trim();
-  if(!brk)brk='wss://broker.emqx.io:8084/mqtt';
-  if(!name){alert('请输入昵称');return;}
-  myName=name;myBroker=brk;
-  localStorage.setItem('wcs_name',name);localStorage.setItem('wcs_broker',brk);
-  document.getElementById('modalOverlay').classList.remove('show');
-  if(brk){brokerList=brk.split(',').map(function(s){return s.trim();}).filter(Boolean);}
-  startApp();
-}
-
-function skipSetup(){
-  myBroker='';localStorage.setItem('wcs_broker','');
-  if(!myName){myName='User_'+myUID.substring(0,6);localStorage.setItem('wcs_name',myName);}
-  document.getElementById('modalOverlay').classList.remove('show');
-  startApp();
-}
-
-function reopenSetup(){
-  document.getElementById('nickInput').value=myName;
-  document.getElementById('brokerInput').value=myBroker||'';
-  document.getElementById('modalOverlay').classList.add('show');
-}
-
-// ========================================== IndexedDB ==========================================
-var db=null;
-function openDB(cb){
-  var req=indexedDB.open('wcs_logs_v2',1);
-  req.onupgradeneeded=function(e){var d=e.target.result;if(!d.objectStoreNames.contains('logs'))d.createObjectStore('logs',{keyPath:'date'});};
-  req.onsuccess=function(e){db=e.target.result;loadFromDB(cb);};
-  req.onerror=function(){if(cb)cb();};
-}
-function saveToDB(date,data){
-  if(!db)return;
-  try{var tx=db.transaction('logs','readwrite');tx.objectStore('logs').put({date:date,filename:data.filename,entries:data.entries,_raw:data._raw||''});}catch(e){}
-}
-function loadFromDB(cb){
-  if(!db){if(cb)cb();return;}
-  try{var tx=db.transaction('logs','readonly');var req=tx.objectStore('logs').getAll();
-    req.onsuccess=function(){var items=req.result;for(var i=0;i<items.length;i++){var item=items[i];logStore[item.date]=item;}if(cb)cb();};
-    req.onerror=function(){if(cb)cb();};
-  }catch(e){if(cb)cb();}
-}
-function deleteFromDB(date,cb){
-  if(!db){if(cb)cb();return;}
-  try{var tx=db.transaction('logs','readwrite');tx.objectStore('logs').delete(date);if(cb)tx.oncomplete=cb;}catch(e){if(cb)cb();}
-}
-function clearDB(cb){
-  if(!db){if(cb)cb();return;}
-  try{var tx=db.transaction('logs','readwrite');tx.objectStore('logs').clear();if(cb)tx.oncomplete=cb;}catch(e){if(cb)cb();}
-}
-
-// ========================================== MQTT ==========================================
-var mqttClient=null;var mqttConnected=false;
-var peers={};var heartbeatTimer=null;
-var CHUNK_SIZE=50000;var pendingChunks={};
-var TOPIC_PEER='wcs/peer';var TOPIC_META='wcs/log/meta';var TOPIC_DELETE='wcs/log/delete';
-
-function tryConnectMQTT(){
-  if(!brokerList.length||typeof mqtt==='undefined')return;
-  var url=brokerList[currentBroker];if(!url)return;
-  disconnectMQTT();
-  try{
-    mqttClient=mqtt.connect(url,{keepalive:30,reconnectPeriod:0});
-    mqttClient.on('connect',function(){
-      mqttConnected=true;
-      mqttClient.subscribe([TOPIC_PEER,TOPIC_META,TOPIC_DELETE],{qos:1});
-      document.getElementById('tag').innerHTML='在线 · 共享';
-      startHeartbeat();
-      mqttClient.publish(TOPIC_PEER,JSON.stringify({uid:myUID,name:myName,ts:Date.now(),type:'hello'}),{qos:1});
-    });
-    mqttClient.on('message',function(topic,payload){
-      try{var msg=JSON.parse(payload.toString());handleMQTT(topic,msg);}catch(e){}
-    });
-    mqttClient.on('error',function(){mqttConnected=false;switchBroker();});
-    mqttClient.on('close',function(){mqttConnected=false;document.getElementById('tag').innerHTML='离线';stopHeartbeat();switchBroker();});
-  }catch(e){switchBroker();}
-}
-
-var switchBrokerTimer=null;
-function switchBroker(){
-  if(switchBrokerTimer)return; // Already switching
-  currentBroker=(currentBroker+1)%brokerList.length;
-  switchBrokerTimer=setTimeout(function(){
-    switchBrokerTimer=null;
-    if(!mqttConnected)tryConnectMQTT();
-  },5000);
-}
-
-function disconnectMQTT(){
-  stopHeartbeat();
-  if(mqttClient){try{mqttClient.end();}catch(e){}mqttClient=null;}
-  mqttConnected=false;
-}
-
-function handleMQTT(topic,msg){
-  if(msg.uid===myUID)return;
-  if(topic===TOPIC_PEER){
-    if(msg.type==='hello'){
-      peers[msg.uid]={name:msg.name,ts:msg.ts||Date.now()};
-      var dates=Object.keys(logStore);
-      for(var i=0;i<dates.length;i++){
-        var d=logStore[dates[i]];
-        mqttClient.publish(TOPIC_META,JSON.stringify({uid:myUID,date:d.date,filename:d.filename,count:d.entries.length,ts:Date.now()}),{qos:1});
-      }
-    }
-    updatePeerCount();
-  }else if(topic===TOPIC_META){
-    if(msg.date&&!logStore[msg.date]&&msg.uid){
-      var reqTopic='wcs/log/req/'+myUID+'/'+msg.uid;
-      mqttClient.subscribe('wcs/log/chunk/'+myUID,{qos:1});
-      mqttClient.publish(reqTopic,JSON.stringify({date:msg.date,uid:myUID}),{qos:1});
-      pendingChunks[msg.date]={uid:msg.uid,filename:msg.filename,total:0,received:0,chunks:[],raw:''};
-    }
-  }else if(topic===TOPIC_DELETE){
-    if(msg.date){delete logStore[msg.date];deleteFromDB(msg.date);renderDateTabs();refreshDay();}
-  }else if(topic.indexOf('wcs/log/chunk/')===0){
-    var date=msg.date;var idx=msg.idx;var total=msg.total;
-    if(!pendingChunks[date])return;
-    var pc=pendingChunks[date];pc.chunks[idx]=msg.data;pc.received++;pc.total=total;
-    if(pc.received>=pc.total){
-      var raw='';for(var j=0;j<pc.total;j++)raw+=pc.chunks[j]||'';
-      delete pendingChunks[date];var p=parseLog(raw,pc.filename);
-      logStore[p.date]=p;p._raw=raw;saveToDB(p.date,p);
-      renderDateTabs();refreshDay();
-      document.getElementById('msg').innerHTML+='<span class="ok">收到: '+pc.filename+' → '+p.entries.length+'条</span> ';
-    }
-  }else if(topic.indexOf('wcs/log/req/')===0){
-    var reqDate=msg.date;var senderUID=msg.uid;
-    if(!logStore[reqDate]||!logStore[reqDate]._raw)return;
-    var raw=logStore[reqDate]._raw;var total=Math.ceil(raw.length/CHUNK_SIZE);
-    for(var i=0;i<total;i++){
-      (function(idx){
-        setTimeout(function(){
-          if(!mqttClient||!mqttConnected)return;
-          mqttClient.publish('wcs/log/chunk/'+senderUID,JSON.stringify({date:reqDate,idx:idx,total:total,data:raw.substring(idx*CHUNK_SIZE,(idx+1)*CHUNK_SIZE)}),{qos:1});
-        },idx*30);
-      })(i);
-    }
-  }
-}
-
-function startHeartbeat(){
-  stopHeartbeat();
-  heartbeatTimer=setInterval(function(){
-    if(!mqttClient||!mqttConnected)return;
-    mqttClient.publish(TOPIC_PEER,JSON.stringify({uid:myUID,name:myName,ts:Date.now(),type:'ping'}),{qos:1});
-    var now=Date.now();var keys=Object.keys(peers);
-    for(var i=0;i<keys.length;i++){if(now-peers[keys[i]].ts>35000)delete peers[keys[i]];}
-    updatePeerCount();
-  },18000);
-}
-
-function stopHeartbeat(){if(heartbeatTimer){clearInterval(heartbeatTimer);heartbeatTimer=null;}}
-
-function updatePeerCount(){
-  var count=Object.keys(peers).length;
-  var el=document.getElementById('peerCount');
-  if(count>0){el.style.display='inline';el.textContent='● '+count+'人在线';}
-  else{el.style.display='none';}
-}
-
-// ========================================== STATE ==========================================
+// ============================== STATE ==============================
 var logStore={};var currentPage=1;var PAGE_SIZE=15;
 var incidents=[],filtered=[];
 var devChart=null,wdevChart=null,wtrendChart=null;
 var currentTab='day';var activeDate='';
 var weekIncidents=[],weekFiltered=[],weekPage=1;
+var shared=false;
 
-function getAllEntries(dateFilter){
-  var entries=[];var dates=Object.keys(logStore);
-  for(var i=0;i<dates.length;i++){if(dateFilter&&dates[i]!==dateFilter)continue;entries=entries.concat(logStore[dates[i]].entries);}
-  entries.sort(function(a,b){return a.ts.localeCompare(b.ts);});return entries;
+// ============================== IndexedDB STORAGE ==============================
+var db=null;
+function openDB(cb){
+  var req=indexedDB.open('wcs_logs',1);
+  req.onupgradeneeded=function(e){var d=e.target.result;if(!d.objectStoreNames.contains('logs'))d.createObjectStore('logs',{keyPath:'date'});};
+  req.onsuccess=function(e){db=e.target.result;loadFromDB(cb);};
+  req.onerror=function(){if(cb)cb();};
 }
 
-// ========================================== INIT ==========================================
-function startApp(){
-  openDB(function(){
-    setupUpload();
-    renderDateTabs();refreshDay();
-    // Connect MQTT after a short delay
-    if(brokerList.length)setTimeout(function(){tryConnectMQTT();},1000);
-  });
+function saveToDB(date,data){
+  if(!db)return;
+  try{var tx=db.transaction('logs','readwrite');var store=tx.objectStore('logs');store.put({date:date,filename:data.filename,entries:data.entries});}catch(e){}
 }
 
-function setupUpload(){
+function loadFromDB(cb){
+  if(!db){if(cb)cb();return;}
+  try{
+    var tx=db.transaction('logs','readonly');var store=tx.objectStore('logs');var req=store.getAll();
+    req.onsuccess=function(){
+      var items=req.result;for(var i=0;i<items.length;i++){var item=items[i];logStore[item.date]=item;}
+      if(cb)cb();
+    };
+    req.onerror=function(){if(cb)cb();};
+  }catch(e){if(cb)cb();}
+}
+
+function clearDB(cb){
+  if(!db){if(cb)cb();return;}
+  try{var tx=db.transaction('logs','readwrite');var store=tx.objectStore('logs');store.clear();if(cb)tx.oncomplete=cb;}catch(e){if(cb)cb();}
+}
+
+// ============================== INIT ==============================
+document.addEventListener('DOMContentLoaded',function(){
+  // Set up upload handler
   document.getElementById('fupload').addEventListener('change',function(){
     var files=this.files;if(!files||!files.length)return;
     document.getElementById('msg').innerHTML='解析中...';
@@ -421,11 +278,9 @@ function setupUpload(){
       (function(file){
         var r=new FileReader();
         r.onload=function(){
-          var p=parseLog(r.result,file.name);p._raw=r.result;
-          logStore[p.date]=p;saveToDB(p.date,p);
-          if(mqttConnected){
-            mqttClient.publish(TOPIC_META,JSON.stringify({uid:myUID,date:p.date,filename:p.filename,count:p.entries.length,ts:Date.now()}),{qos:1});
-          }
+          var p=parseLog(r.result,file.name);
+          logStore[p.date]=p;
+          saveToDB(p.date,p);
           html+='<span class="ok">'+file.name+' → '+p.entries.length+'条 / '+p.entries.filter(function(e){return e.level==='E';}).length+'错</span> ';
           done++;if(done>=files.length){document.getElementById('msg').innerHTML=html;currentPage=1;refresh();}
         };
@@ -434,17 +289,135 @@ function setupUpload(){
       })(files[i]);
     }
   });
+
+  // Init: open IndexedDB → render
+  openDB(function(){
+    renderDateTabs();refreshDay();
+  });
+});
+
+// ===== SHARED MODE =====
+function uploadShared(input){
+  var files=input.files;if(!files||!files.length)return;
+  document.getElementById('msg').innerHTML='上传中...';
+  var form=new FormData();for(var i=0;i<files.length;i++)form.append('logs',files[i]);
+  fetch('/api/upload',{method:'POST',body:form}).then(function(r){return r.json();}).then(function(data){
+    var html='';for(var i=0;i<data.results.length;i++){var r=data.results[i];html+=r.ok?'<span class="ok">'+r.filename+' → '+r.entries+'条 / '+r.errors+'错</span> ':'<span class="fail">'+r.filename+':错误</span> ';}
+    document.getElementById('msg').innerHTML=html;currentPage=1;loadShared();
+  }).catch(function(e){document.getElementById('msg').innerHTML='<span class="fail">上传失败</span>';});
 }
 
-// ========================================== UI ==========================================
+function loadShared(){
+  fetch('/api/dashboard').then(function(r){return r.json();}).then(function(d){
+    if(d.empty){document.getElementById('tag').innerHTML='无数据 · 共享';resetStats();return;}
+    document.getElementById('tag').innerHTML=d.dateCount+'天 · 共享';
+    document.getElementById('s1').innerHTML=d.incidentsTotal;document.getElementById('s2').innerHTML=d.summary.resolved;
+    document.getElementById('s3').innerHTML=d.summary.unresolved;document.getElementById('s4').innerHTML=d.summary.avgMin+'分';
+    document.getElementById('s5').innerHTML=d.summary.maxMin+'分';document.getElementById('s6').innerHTML=d.dateCount;
+    renderDevChart(d.deviceRank);renderErrorBars('errBars',d.errorDist);
+    var fd=document.getElementById('fd');fd.innerHTML='<option value="">全部设备</option>';
+    for(var i=0;i<d.deviceRank.length;i++)fd.innerHTML+='<option>'+d.deviceRank[i].device+'</option>';
+    var ft=document.getElementById('ft');ft.innerHTML='<option value="">全部类型</option>';
+    for(var i=0;i<d.errorDist.length;i++)ft.innerHTML+='<option>'+d.errorDist[i].type+'</option>';
+    document.getElementById('fd').onchange=function(){currentPage=1;loadSharedIncidents();};
+    document.getElementById('ft').onchange=function(){currentPage=1;loadSharedIncidents();};
+    document.getElementById('fr').onchange=function(){currentPage=1;loadSharedIncidents();};
+    loadSharedIncidents();
+    // Date dropdown
+    fetch('/api/dates').then(function(r){return r.json();}).then(function(dates){
+      var sel=document.getElementById('dsel');sel.innerHTML='<option value="">全部（'+dates.length+'天）</option>';
+      for(var i=0;i<dates.length;i++)sel.innerHTML+='<option value="'+dates[i].date+'"'+(activeDate===dates[i].date?' selected':'')+'>'+dates[i].date+' （'+dates[i].errors+'错）</option>';
+      document.getElementById('btnDelDate').style.display=activeDate?'inline-block':'none';
+    });
+  }).catch(function(){document.getElementById('tag').innerHTML='加载失败';});
+}
+
+function loadSharedIncidents(){
+  var p='page='+currentPage+'&pageSize='+PAGE_SIZE;
+  var dev=document.getElementById('fd').value;var typ=document.getElementById('ft').value;var res=document.getElementById('fr').value;
+  if(dev)p+='&device='+encodeURIComponent(dev);if(typ)p+='&errorType='+encodeURIComponent(typ);if(res)p+='&resolved='+res;
+  if(activeDate)p+='&date='+activeDate;
+  fetch('/api/incidents?'+p).then(function(r){return r.json();}).then(function(data){
+    var tb=document.getElementById('tb');
+    if(!data.incidents.length){tb.innerHTML='<tr><td colspan="9" style="color:#78809a;text-align:center;padding:20px">无匹配</td></tr>';}
+    else{tb.innerHTML='';for(var i=0;i<data.incidents.length;i++){var inc=data.incidents[i];tb.innerHTML+='<tr><td><strong>'+inc.device+'</strong></td><td>'+inc.errorType+'</td><td>'+inc.date+'</td><td>'+(inc.startTimestamp||'').slice(11,19)+'</td><td>'+(inc.endTimestamp||'').slice(11,19)+'</td><td>'+inc.durationStr+'</td><td>'+inc.repeatCount+'</td><td>'+(inc.displayBarcode||inc.barcode||'-')+'</td><td class="'+(inc.resolved?'badge-ok':'badge-no')+'">'+(inc.resolved?'已解决':'未解决')+'</td></tr>';}}
+    document.getElementById('pg').innerHTML=data.total+'条 · '+data.page+'/'+data.totalPages+'页';
+  });
+}
+
+function loadSharedWeek(){
+  var wf=document.getElementById('wsFrom').value;var wt=document.getElementById('wsTo').value;
+  var params='';if(wf)params+='&dateFrom='+wf;if(wt)params+='&dateTo='+wt;
+  fetch('/api/weekly?'+(params?'?'+params.substring(1):'')).then(function(r){return r.json();}).then(function(data){
+    if(!data.dailyData||!data.dailyData.length)return;
+    var ws=data.weekSummary;document.getElementById('wmsg').innerHTML='<span class="ok">共'+(ws.total||0)+'条 · 已解决'+(ws.resolved||0)+' · 平均'+(ws.avgMin||0)+'分</span>';
+    renderWDevChart(data.weekDeviceRank||[]);renderErrorBars('wErrBars',data.weekErrorDist||[]);
+    if(data.dailyData.length){
+      renderWTrend(data.dailyData);
+      var tb=document.getElementById('wtb');tb.innerHTML='';
+      for(var i=0;i<data.dailyData.length;i++){var d=data.dailyData[i];var tops='';for(var j=0;j<Math.min(d.topDevices.length,5);j++)tops+=d.topDevices[j].device+'('+d.topDevices[j].count+') ';tb.innerHTML+='<tr><td><strong>'+d.date+'</strong></td><td>'+d.totalIncidents+'</td><td style="color:#0c8">'+d.resolved+'</td><td style="color:#f44">'+d.unresolved+'</td><td>'+d.avgMin+'分</td><td>'+d.maxMin+'分</td><td>'+tops+'</td></tr>';}
+    }
+    // Weekly incident list
+    var p='page='+weekPage+'&pageSize='+PAGE_SIZE;if(wf)p+='&dateFrom='+wf;if(wt)p+='&dateTo='+wt;
+    fetch('/api/incidents?'+p).then(function(r){return r.json();}).then(function(idata){
+      weekIncidents=idata.incidents||[];
+      var wfd=document.getElementById('wfd');wfd.innerHTML='<option value="">全部设备</option>';
+      var wft=document.getElementById('wft');wft.innerHTML='<option value="">全部类型</option>';
+      document.getElementById('wfd').onchange=function(){weekPage=1;filterWeekIncidents();};
+      document.getElementById('wft').onchange=function(){weekPage=1;filterWeekIncidents();};
+      document.getElementById('wfr').onchange=function(){weekPage=1;filterWeekIncidents();};
+      filterWeekIncidentsShared(idata);
+    });
+  });
+}
+
+function filterWeekIncidentsShared(idata){
+  var dev=document.getElementById('wfd').value;var typ=document.getElementById('wft').value;var res=document.getElementById('wfr').value;
+  var items=idata.incidents||[];
+  if(dev)items=items.filter(function(i){return i.device===dev;});
+  if(typ)items=items.filter(function(i){return i.errorType===typ;});
+  if(res==='1')items=items.filter(function(i){return i.resolved;});
+  if(res==='0')items=items.filter(function(i){return !i.resolved;});
+  var start=(weekPage-1)*PAGE_SIZE;var page=items.slice(start,start+PAGE_SIZE);
+  var tb=document.getElementById('wtb2');
+  if(!page.length){tb.innerHTML='<tr><td colspan="9" style="color:#78809a;text-align:center;padding:20px">无匹配</td></tr>';}
+  else{tb.innerHTML='';for(var i=0;i<page.length;i++){var inc=page[i];tb.innerHTML+='<tr><td><strong>'+inc.device+'</strong></td><td>'+inc.errorType+'</td><td>'+inc.date+'</td><td>'+(inc.startTimestamp||'').slice(11,19)+'</td><td>'+(inc.endTimestamp||'').slice(11,19)+'</td><td>'+inc.durationStr+'</td><td>'+inc.repeatCount+'</td><td>'+(inc.displayBarcode||inc.barcode||'-')+'</td><td class="'+(inc.resolved?'badge-ok':'badge-no')+'">'+(inc.resolved?'已解决':'未解决')+'</td></tr>';}}
+  document.getElementById('wpg').innerHTML=items.length+'条 · '+weekPage+'/'+(Math.ceil(items.length/PAGE_SIZE)||1)+'页';
+}
+
+function deleteCurrentDate(){
+  if(!activeDate){alert('请先选择要删除的日期');return;}
+  if(!confirm('确定删除 '+activeDate+' 的所有日志数据？此操作不可恢复。'))return;
+  fetch('/api/dates/'+encodeURIComponent(activeDate),{method:'DELETE'}).then(function(r){return r.json();}).then(function(data){
+    if(data.ok){activeDate='';loadShared();}
+  }).catch(function(){alert('删除失败');});
+}
+
+function resetStats(){
+  document.getElementById('s1').innerHTML='-';document.getElementById('s2').innerHTML='-';document.getElementById('s3').innerHTML='-';
+  document.getElementById('s4').innerHTML='-';document.getElementById('s5').innerHTML='-';document.getElementById('s6').innerHTML='-';
+  document.getElementById('tb').innerHTML='';
+}
+
+function getAllEntries(dateFilter){
+  var entries=[];var dates=Object.keys(logStore);
+  for(var i=0;i<dates.length;i++){
+    if(dateFilter&&dates[i]!==dateFilter)continue;
+    entries=entries.concat(logStore[dates[i]].entries);
+  }
+  entries.sort(function(a,b){return a.ts.localeCompare(b.ts);});
+  return entries;
+}
+
 function renderDateTabs(){
   var dates=Object.keys(logStore).sort();var sel=document.getElementById('dsel');
   sel.innerHTML='<option value="">全部（'+dates.length+'天）</option>';
   for(var i=0;i<dates.length;i++){
-    var d=dates[i];var errs=logStore[d].entries.filter(function(e){return e.level==='E';}).length;
+    var d=dates[i];
+    var errs=logStore[d].entries.filter(function(e){return e.level==='E';}).length;
     sel.innerHTML+='<option value="'+d+'"'+(activeDate===d?' selected':'')+'>'+d+' （'+errs+'错）</option>';
   }
-  document.getElementById('btnDelDate').style.display=activeDate?'inline-block':'none';
+  // Also populate week date selectors
   var wf=document.getElementById('wsFrom');var wt=document.getElementById('wsTo');
   var wfVal=wf.value;var wtVal=wt.value;
   wf.innerHTML='<option value="">最早</option>';wt.innerHTML='<option value="">最晚</option>';
@@ -454,94 +427,215 @@ function renderDateTabs(){
   }
 }
 
-function selectDate(date){activeDate=date;currentPage=1;renderDateTabs();if(currentTab==='day')refreshDay();else refreshWeek();}
-function refresh(){renderDateTabs();if(currentTab==='day')refreshDay();else refreshWeek();}
+function selectDate(date){
+  activeDate=date;currentPage=1;
+  document.getElementById('btnDelDate').style.display=date?'inline-block':'none';
+  renderDateTabs();
+  if(currentTab==='day'){if(shared)loadShared();else refreshDay();}else refreshWeek();
+}
+
+// ============================== TABS ==============================
+function switchTab(tab){
+  currentTab=tab;
+  document.getElementById('tabDay').className='tab-btn'+(tab==='day'?' active':'');
+  document.getElementById('tabWeek').className='tab-btn'+(tab==='week'?' active':'');
+  document.getElementById('viewDay').style.display=tab==='day'?'block':'none';
+  document.getElementById('viewWeek').style.display=tab==='week'?'block':'none';
+  if(tab==='day'){if(shared)loadShared();else refreshDay();}else refreshWeek();
+}
+
+// ============================== DAY VIEW ==============================
+function refresh(){
+  renderDateTabs();
+  if(currentTab==='day')refreshDay();else refreshWeek();
+}
 
 function refreshDay(){
+  if(shared){loadShared();return;}
+  renderDateTabs();
   var entries=getAllEntries(activeDate);
   if(!entries.length){
-    document.getElementById('tag').innerHTML=mqttConnected?'在线 · 无数据':'离线 · 无数据';
+    document.getElementById('tag').innerHTML='无数据';
     document.getElementById('s1').innerHTML='-';document.getElementById('s2').innerHTML='-';document.getElementById('s3').innerHTML='-';
     document.getElementById('s4').innerHTML='-';document.getElementById('s5').innerHTML='-';document.getElementById('s6').innerHTML='-';
     document.getElementById('tb').innerHTML='';return;
   }
-  incidents=extractIncidents(entries);var sum=summarize(incidents);
+  incidents=extractIncidents(entries);
+  var sum=summarize(incidents);
   var totalDates=Object.keys(logStore).length;
-  document.getElementById('tag').innerHTML=(activeDate||'全部('+totalDates+'天)')+(mqttConnected?' · 共享':'');
-  document.getElementById('s1').innerHTML=incidents.length;document.getElementById('s2').innerHTML=sum.resolved;
-  document.getElementById('s3').innerHTML=sum.unresolved;document.getElementById('s4').innerHTML=(sum.avgSec/60).toFixed(1)+'分';
-  document.getElementById('s5').innerHTML=(sum.maxSec/60).toFixed(1)+'分';document.getElementById('s6').innerHTML=totalDates;
+  var sel=activeDate?activeDate:'全部('+totalDates+'天)';
+  document.getElementById('tag').innerHTML=sel;
+  document.getElementById('s1').innerHTML=incidents.length;
+  document.getElementById('s2').innerHTML=sum.resolved;
+  document.getElementById('s3').innerHTML=sum.unresolved;
+  document.getElementById('s4').innerHTML=(sum.avgSec/60).toFixed(1)+'分';
+  document.getElementById('s5').innerHTML=(sum.maxSec/60).toFixed(1)+'分';
+  document.getElementById('s6').innerHTML=totalDates;
 
-  var rank=deviceRank(incidents).slice(0,15);renderDevChart(rank);
-  var dist=typeDist(incidents);renderErrorBars('errBars',dist);
-  var fd=document.getElementById('fd');fd.innerHTML='<option value="">全部设备</option>';
-  for(var i=0;i<rank.length;i++)fd.innerHTML+='<option>'+rank[i].device+'</option>';
-  var ft=document.getElementById('ft');ft.innerHTML='<option value="">全部类型</option>';
-  for(var i=0;i<dist.length;i++)ft.innerHTML+='<option>'+dist[i].type+'</option>';
+  // Charts
+  var rank=deviceRank(incidents).slice(0,15);
+  renderDevChart(rank);
+  renderErrorBars('errBars',typeDist(incidents));
+
+  // Filters
+  var dist=typeDist(incidents);
+  var fd=document.getElementById('fd');
+  fd.innerHTML='<option value="">全部设备</option>';
+  for(var i=0;i<rank.length;i++){fd.innerHTML+='<option>'+rank[i].device+'</option>';}
+  var ft=document.getElementById('ft');
+  ft.innerHTML='<option value="">全部类型</option>';
+  for(var i=0;i<dist.length;i++){ft.innerHTML+='<option>'+dist[i].type+'</option>';}
   document.getElementById('fd').onchange=function(){currentPage=1;filterIncidents();};
   document.getElementById('ft').onchange=function(){currentPage=1;filterIncidents();};
   document.getElementById('fr').onchange=function(){currentPage=1;filterIncidents();};
-  filterIncidents();
-}
 
-function filterIncidents(){
-  var dev=document.getElementById('fd').value;var typ=document.getElementById('ft').value;var res=document.getElementById('fr').value;
-  filtered=[];
-  for(var i=0;i<incidents.length;i++){var inc=incidents[i];if(dev&&inc.device!==dev)continue;if(typ&&inc.type!==typ)continue;if(res==='1'&&!inc.resolved)continue;if(res==='0'&&inc.resolved)continue;filtered.push(inc);}
-  var start=(currentPage-1)*PAGE_SIZE;var items=filtered.slice(start,start+PAGE_SIZE);
-  var tb=document.getElementById('tb');
-  if(!items.length){tb.innerHTML='<tr><td colspan="9" style="color:#78809a;text-align:center;padding:20px">无匹配</td></tr>';}
-  else{tb.innerHTML='';for(var i=0;i<items.length;i++){var inc=items[i];tb.innerHTML+='<tr><td><strong>'+inc.device+'</strong></td><td>'+inc.type+'</td><td>'+inc.date+'</td><td>'+inc.st.slice(11,19)+'</td><td>'+inc.et.slice(11,19)+'</td><td>'+fmtDur(inc.dur)+'</td><td>'+inc.rc+'</td><td>'+(inc.rb||inc.bc||'-')+'</td><td class="'+(inc.resolved?'badge-ok':'badge-no')+'">'+(inc.resolved?'已解决':'未解决')+'</td></tr>';}}
-  document.getElementById('pg').innerHTML=filtered.length+'条 · '+currentPage+'/'+(Math.ceil(filtered.length/PAGE_SIZE)||1)+'页';
+  filterIncidents();
 }
 
 function renderDevChart(rank){
   if(devChart){devChart.destroy();devChart=null;}
   var ctx=document.getElementById('chartDev');if(!ctx||!rank.length)return;
-  if(typeof Chart==='undefined')return;
+  if(typeof Chart==='undefined'){document.getElementById('chartDev').parentNode.innerHTML='<span style="color:#78809a">图表加载失败</span>';return;}
+
+  // Collect all error types and assign colors
   var allTypes={};var typeColors=[];
-  for(var i=0;i<rank.length;i++){var types=Object.keys(rank[i].types);for(var j=0;j<types.length;j++){if(!allTypes[types[j]]){allTypes[types[j]]=true;typeColors.push(types[j]);}}}
+  for(var i=0;i<rank.length;i++){
+    var types=Object.keys(rank[i].types);
+    for(var j=0;j<types.length;j++){
+      if(!allTypes[types[j]]){allTypes[types[j]]=true;typeColors.push(types[j]);}
+    }
+  }
   var colors=['#f44','#fa3','#f97316','#59f','#0c8','#a78bfa','#f472b6','#ff784b','#38bdf8','#a3e635'];
+
+  // Build stacked datasets
   var datasets=[];
-  for(var t=0;t<typeColors.length;t++){var tn=typeColors[t];var data=[];for(var d=0;d<rank.length;d++)data.push(rank[d].types[tn]||0);datasets.push({label:tn,data:data,backgroundColor:colors[t%colors.length],borderRadius:t===typeColors.length-1?4:0});}
-  try{devChart=new Chart(ctx,{type:'bar',data:{labels:rank.map(function(d){return d.device;}),datasets:datasets},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:'#e0e4ec',font:{size:10},padding:2,boxWidth:10}}},scales:{x:{stacked:true,ticks:{color:'#78809a',font:{size:10}},grid:{color:'#2a3040'}},y:{stacked:true,ticks:{color:'#e0e4ec',font:{size:11}},grid:{display:false}}}}});}catch(e){}
+  for(var t=0;t<typeColors.length;t++){
+    var typeName=typeColors[t];
+    var data=[];
+    for(var d=0;d<rank.length;d++){
+      data.push(rank[d].types[typeName]||0);
+    }
+    datasets.push({
+      label:typeName,
+      data:data,
+      backgroundColor:colors[t%colors.length],
+      borderRadius:t===typeColors.length-1?4:0
+    });
+  }
+
+  // Labels: device + top type
+  var labels=rank.map(function(d){return d.device;});
+
+  try{
+    devChart=new Chart(ctx,{
+      type:'bar',
+      data:{labels:labels,datasets:datasets},
+      options:{
+        indexAxis:'y',responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{position:'bottom',labels:{color:'#e0e4ec',font:{size:10},padding:2,boxWidth:10}}},
+        scales:{
+          x:{stacked:true,ticks:{color:'#78809a',font:{size:10}},grid:{color:'#2a3040'}},
+          y:{stacked:true,ticks:{color:'#e0e4ec',font:{size:11}},grid:{display:false}}
+        }
+      }
+    });
+  }catch(e){document.getElementById('chartDev').parentNode.innerHTML='<span style="color:#f44">图表错误: '+e.message+'</span>';}
 }
 
 function renderErrorBars(id,dist){
   var c=document.getElementById(id);if(!c||!dist.length)return;
-  var colors=['#f44','#fa3','#f97316','#59f','#0c8','#a78bfa','#78809a'];var max=dist[0].count;var html='';
-  for(var i=0;i<Math.min(dist.length,15);i++){var d=dist[i];html+='<div class="eb-row"><span class="eb-label" title="'+d.type+'">'+d.type+'</span><div class="eb-track"><div class="eb-fill" style="width:'+Math.round(d.count/max*100)+'%;background:'+colors[i%7]+'"></div></div><span class="eb-count">'+d.count+'</span><span class="eb-pct">'+d.pct+'%</span></div>';}
+  var colors=['#f44','#fa3','#f97316','#59f','#0c8','#a78bfa','#78809a'];
+  var max=dist[0].count;
+  var html='';
+  for(var i=0;i<Math.min(dist.length,15);i++){
+    var d=dist[i];
+    html+='<div class="eb-row"><span class="eb-label" title="'+d.type+'">'+d.type+'</span><div class="eb-track"><div class="eb-fill" style="width:'+Math.round(d.count/max*100)+'%;background:'+colors[i%7]+'"></div></div><span class="eb-count">'+d.count+'</span><span class="eb-pct">'+d.pct+'%</span></div>';
+  }
   c.innerHTML=html;
 }
 
-function switchTab(tab){
-  currentTab=tab;
-  document.getElementById('tabDay').className='tab-btn'+(tab==='day'?' active':'');document.getElementById('tabWeek').className='tab-btn'+(tab==='week'?' active':'');
-  document.getElementById('viewDay').style.display=tab==='day'?'block':'none';document.getElementById('viewWeek').style.display=tab==='week'?'block':'none';
-  if(tab==='day')refreshDay();else refreshWeek();
+function filterIncidents(){
+  var dev=document.getElementById('fd').value;
+  var typ=document.getElementById('ft').value;
+  var res=document.getElementById('fr').value;
+  filtered=[];
+  for(var i=0;i<incidents.length;i++){
+    var inc=incidents[i];
+    if(dev&&inc.device!==dev)continue;
+    if(typ&&inc.type!==typ)continue;
+    if(res==='1'&&!inc.resolved)continue;
+    if(res==='0'&&inc.resolved)continue;
+    filtered.push(inc);
+  }
+  var start=(currentPage-1)*PAGE_SIZE;
+  var items=filtered.slice(start,start+PAGE_SIZE);
+  var tbody=document.getElementById('tb');
+  if(!items.length){tbody.innerHTML='<tr><td colspan="9" style="color:#78809a;text-align:center;padding:20px">无匹配</td></tr>';}
+  else{
+    tbody.innerHTML='';
+    for(var i=0;i<items.length;i++){
+      var inc=items[i];
+      tbody.innerHTML+='<tr><td><strong>'+inc.device+'</strong></td><td>'+inc.type+'</td><td>'+inc.date+'</td><td>'+inc.st.slice(11,19)+'</td><td>'+inc.et.slice(11,19)+'</td><td>'+fmtDur(inc.dur)+'</td><td>'+inc.rc+'</td><td>'+(inc.rb||inc.bc||'-')+'</td><td class="'+(inc.resolved?'badge-ok':'badge-no')+'">'+(inc.resolved?'已解决':'未解决')+'</td></tr>';
+    }
+  }
+  var totalPages=Math.ceil(filtered.length/PAGE_SIZE)||1;
+  document.getElementById('pg').innerHTML=filtered.length+'条 · '+currentPage+'/'+totalPages+'页';
 }
 
+function changePage(d){currentPage=Math.max(1,currentPage+d);filterIncidents();}
+
+// ============================== WEEK VIEW ==============================
 function refreshWeek(){
+  if(shared){loadSharedWeek();return;}
   var allDates=Object.keys(logStore).sort();
   if(!allDates.length){document.getElementById('wtb').innerHTML='<tr><td colspan="7" style="color:#78809a;text-align:center;padding:20px">无数据</td></tr>';return;}
-  var wf=document.getElementById('wsFrom').value;var wt=document.getElementById('wsTo').value;
-  var dates=[];for(var i=0;i<allDates.length;i++){if((!wf||allDates[i]>=wf)&&(!wt||allDates[i]<=wt))dates.push(allDates[i]);}
+  // Filter by week date range
+  var wf=document.getElementById('wsFrom').value;
+  var wt=document.getElementById('wsTo').value;
+  var dates=[];
+  for(var i=0;i<allDates.length;i++){
+    if((!wf||allDates[i]>=wf)&&(!wt||allDates[i]<=wt))dates.push(allDates[i]);
+  }
   if(!dates.length){document.getElementById('wtb').innerHTML='<tr><td colspan="7" style="color:#78809a;text-align:center;padding:20px">所选范围无数据</td></tr>';return;}
   var dailyData=[];
   for(var i=0;i<dates.length;i++){
-    var entries=logStore[dates[i]].entries;var inc=extractIncidents(entries);var sum=summarize(inc);var rank=deviceRank(inc);
-    var tops=[];for(var j=0;j<Math.min(5,rank.length);j++)tops.push(rank[j].device+'('+rank[j].total+')');
-    dailyData.push({date:dates[i],totalIncidents:inc.length,resolved:sum.resolved,unresolved:sum.unresolved,avgMin:(sum.avgSec/60).toFixed(1),maxMin:(sum.maxSec/60).toFixed(1),topDevices:rank.slice(0,5).map(function(d){return{device:d.device,count:d.total};})});
+    var entries=logStore[dates[i]].entries;
+    var inc=extractIncidents(entries);
+    var sum=summarize(inc);
+    var rank=deviceRank(inc);
+    var tops=[];
+    for(var j=0;j<Math.min(5,rank.length);j++){tops.push(rank[j].device+'('+rank[j].total+')');}
+    dailyData.push({date:dates[i],total:inc.length,resolved:sum.resolved,unresolved:sum.unresolved,avg:(sum.avgSec/60).toFixed(1),max:(sum.maxSec/60).toFixed(1),tops:tops.join(', ')});
   }
-  var allEntries=[];for(var i=0;i<dates.length;i++)allEntries=allEntries.concat(logStore[dates[i]].entries);
-  allEntries.sort(function(a,b){return a.ts.localeCompare(b.ts);});
-  var allInc=extractIncidents(allEntries);var allSum=summarize(allInc);
-  document.getElementById('wmsg').innerHTML='<span class="ok">共'+allInc.length+'条 · 已解决'+allSum.resolved+' · 平均'+(allSum.avgSec/60).toFixed(1)+'分</span>';
-  renderWDevChart(deviceRank(allInc).slice(0,15));renderErrorBars('wErrBars',typeDist(allInc));renderWTrend(dailyData);
-  var tbody=document.getElementById('wtb');tbody.innerHTML='';
-  for(var i=0;i<dailyData.length;i++){var d=dailyData[i];var tops='';for(var j=0;j<Math.min(d.topDevices.length,5);j++)tops+=d.topDevices[j].device+'('+d.topDevices[j].count+') ';tbody.innerHTML+='<tr><td><strong>'+d.date+'</strong></td><td>'+d.totalIncidents+'</td><td style="color:#0c8">'+d.resolved+'</td><td style="color:#f44">'+d.unresolved+'</td><td>'+d.avgMin+'分</td><td>'+d.maxMin+'分</td><td>'+tops+'</td></tr>';}
 
-  weekIncidents=allInc;var wrank=deviceRank(weekIncidents);var wdist=typeDist(weekIncidents);
+  // Week summary (filtered range)
+  var allEntries=[];for(var i=0;i<dates.length;i++){allEntries=allEntries.concat(logStore[dates[i]].entries);}
+  allEntries.sort(function(a,b){return a.ts.localeCompare(b.ts);});
+  var allInc=extractIncidents(allEntries);
+  var allSum=summarize(allInc);
+  document.getElementById('wmsg').innerHTML='<span class="ok">共'+allInc.length+'条故障 · 已解决'+allSum.resolved+' · 平均'+(allSum.avgSec/60).toFixed(1)+'分 · 最长'+(allSum.maxSec/60).toFixed(1)+'分</span>';
+
+  // Week device chart
+  var wrank=deviceRank(allInc).slice(0,15);
+  renderWDevChart(wrank);
+
+  // Week error bars
+  renderErrorBars('wErrBars',typeDist(allInc));
+
+  // Trend chart
+  renderWTrend(dailyData);
+
+  // Table
+  var tbody=document.getElementById('wtb');
+  tbody.innerHTML='';
+  for(var i=0;i<dailyData.length;i++){
+    var d=dailyData[i];
+    tbody.innerHTML+='<tr><td><strong>'+d.date+'</strong></td><td>'+d.total+'</td><td style="color:#0c8">'+d.resolved+'</td><td style="color:#f44">'+d.unresolved+'</td><td>'+d.avg+'分</td><td>'+d.max+'分</td><td>'+d.tops+'</td></tr>';
+  }
+
+  // Weekly incident list
+  weekIncidents=extractIncidents(allEntries);
+  var wrank=deviceRank(weekIncidents);var wdist=typeDist(weekIncidents);
   var wfd=document.getElementById('wfd');wfd.innerHTML='<option value="">全部设备</option>';
   for(var i=0;i<wrank.length;i++)wfd.innerHTML+='<option>'+wrank[i].device+'</option>';
   var wft=document.getElementById('wft');wft.innerHTML='<option value="">全部类型</option>';
@@ -552,29 +646,17 @@ function refreshWeek(){
   weekPage=1;filterWeekIncidents();
 }
 
-function renderWDevChart(rank){
-  if(wdevChart){wdevChart.destroy();wdevChart=null;}
-  var ctx=document.getElementById('chartWDev');if(!ctx||!rank.length)return;
-  if(typeof Chart==='undefined')return;
-  var allTypes={};var typeColors=[];
-  for(var i=0;i<rank.length;i++){var types=Object.keys(rank[i].types);for(var j=0;j<types.length;j++){if(!allTypes[types[j]]){allTypes[types[j]]=true;typeColors.push(types[j]);}}}
-  var colors=['#f44','#fa3','#f97316','#59f','#0c8','#a78bfa','#f472b6','#ff784b','#38bdf8','#a3e635'];
-  var datasets=[];
-  for(var t=0;t<typeColors.length;t++){var tn=typeColors[t];var data=[];for(var d=0;d<rank.length;d++)data.push(rank[d].types[tn]||0);datasets.push({label:tn,data:data,backgroundColor:colors[t%colors.length],borderRadius:t===typeColors.length-1?4:0});}
-  try{wdevChart=new Chart(ctx,{type:'bar',data:{labels:rank.map(function(d){return d.device;}),datasets:datasets},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:'#e0e4ec',font:{size:10},padding:2,boxWidth:10}}},scales:{x:{stacked:true,ticks:{color:'#78809a',font:{size:10}},grid:{color:'#2a3040'}},y:{stacked:true,ticks:{color:'#e0e4ec',font:{size:11}},grid:{display:false}}}}});}catch(e){}
-}
-
-function renderWTrend(dailyData){
-  if(wtrendChart){wtrendChart.destroy();wtrendChart=null;}
-  var ctx=document.getElementById('chartWTrend');if(!ctx||!dailyData.length)return;
-  if(typeof Chart==='undefined')return;
-  try{wtrendChart=new Chart(ctx,{type:'bar',data:{labels:dailyData.map(function(d){return d.date.slice(5);}),datasets:[{label:'故障',data:dailyData.map(function(d){return d.totalIncidents||0;}),backgroundColor:'rgba(244,68,68,0.7)',borderRadius:4},{label:'已解决',data:dailyData.map(function(d){return d.resolved||0;}),backgroundColor:'rgba(0,200,150,0.7)',borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#e0e4ec',font:{size:11}}}},scales:{x:{ticks:{color:'#78809a'},grid:{display:false}},y:{ticks:{color:'#78809a'},grid:{color:'#2a3040'}}}}});}catch(e){}
-}
-
 function filterWeekIncidents(){
-  var dev=document.getElementById('wfd').value;var typ=document.getElementById('wft').value;var res=document.getElementById('wfr').value;
+  var dev=document.getElementById('wfd').value;
+  var typ=document.getElementById('wft').value;
+  var res=document.getElementById('wfr').value;
   weekFiltered=[];
-  for(var i=0;i<weekIncidents.length;i++){var inc=weekIncidents[i];if(dev&&inc.device!==dev)continue;if(typ&&inc.type!==typ)continue;if(res==='1'&&!inc.resolved)continue;if(res==='0'&&inc.resolved)continue;weekFiltered.push(inc);}
+  for(var i=0;i<weekIncidents.length;i++){
+    var inc=weekIncidents[i];
+    if(dev&&inc.device!==dev)continue;if(typ&&inc.type!==typ)continue;
+    if(res==='1'&&!inc.resolved)continue;if(res==='0'&&inc.resolved)continue;
+    weekFiltered.push(inc);
+  }
   var start=(weekPage-1)*PAGE_SIZE;var items=weekFiltered.slice(start,start+PAGE_SIZE);
   var tb=document.getElementById('wtb2');
   if(!items.length){tb.innerHTML='<tr><td colspan="9" style="color:#78809a;text-align:center;padding:20px">无匹配</td></tr>';}
@@ -582,31 +664,48 @@ function filterWeekIncidents(){
   document.getElementById('wpg').innerHTML=weekFiltered.length+'条 · '+weekPage+'/'+(Math.ceil(weekFiltered.length/PAGE_SIZE)||1)+'页';
 }
 
-function changePage(d){currentPage=Math.max(1,currentPage+d);filterIncidents();}
 function changeWPage(d){weekPage=Math.max(1,weekPage+d);filterWeekIncidents();}
 
-function deleteCurrentDate(){
-  if(!activeDate)return;
-  if(!confirm('确定删除 '+activeDate+' ？'))return;
-  delete logStore[activeDate];deleteFromDB(activeDate);
-  if(mqttConnected)mqttClient.publish(TOPIC_DELETE,JSON.stringify({uid:myUID,date:activeDate,ts:Date.now()}),{qos:1});
-  activeDate='';renderDateTabs();refreshDay();
+function renderWDevChart(rank){
+  if(wdevChart){wdevChart.destroy();wdevChart=null;}
+  var ctx=document.getElementById('chartWDev');if(!ctx||!rank.length)return;
+  if(typeof Chart==='undefined')return;
+  try{
+    wdevChart=new Chart(ctx,{type:'bar',data:{labels:rank.map(function(d){return d.device;}),datasets:[{data:rank.map(function(d){return d.total;}),backgroundColor:rank.map(function(_,i){return 'rgba(255,68,68,'+(1-i*0.05)+')';}),borderRadius:4}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#78809a',font:{size:10}},grid:{color:'#2a3040'}},y:{ticks:{color:'#e0e4ec',font:{size:11}},grid:{display:false}}}}});
+  }catch(e){}
 }
 
+function renderWTrend(dailyData){
+  if(wtrendChart){wtrendChart.destroy();wtrendChart=null;}
+  var ctx=document.getElementById('chartWTrend');if(!ctx||!dailyData.length)return;
+  if(typeof Chart==='undefined')return;
+  try{
+    wtrendChart=new Chart(ctx,{type:'bar',data:{labels:dailyData.map(function(d){return d.date.slice(5);}),datasets:[{label:'故障',data:dailyData.map(function(d){return d.total;}),backgroundColor:'rgba(244,68,68,0.7)',borderRadius:4},{label:'己解决',data:dailyData.map(function(d){return d.resolved;}),backgroundColor:'rgba(0,200,150,0.7)',borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#e0e4ec',font:{size:11}}}},scales:{x:{ticks:{color:'#78809a'},grid:{display:false}},y:{ticks:{color:'#78809a'},grid:{color:'#2a3040'}}}}});
+  }catch(e){}
+}
+
+// ============================== CLEAR / EXPORT ==============================
 function clearAll(){
   if(!confirm('确定清除所有数据？'))return;
+  if(shared){fetch('/api/data',{method:'DELETE'}).then(function(){loadShared();});return;}
   logStore={};incidents=[];filtered=[];currentPage=1;
-  if(devChart){devChart.destroy();devChart=null;}if(wdevChart){wdevChart.destroy();wdevChart=null;}if(wtrendChart){wtrendChart.destroy();wtrendChart=null;}
-  if(mqttConnected)mqttClient.publish(TOPIC_DELETE,JSON.stringify({uid:myUID,date:'*',ts:Date.now()}),{qos:1});
+  if(devChart){devChart.destroy();devChart=null;}
+  if(wdevChart){wdevChart.destroy();wdevChart=null;}
+  if(wtrendChart){wtrendChart.destroy();wtrendChart=null;}
   clearDB(function(){renderDateTabs();refreshDay();});
 }
 
 function exportCSV(){
+  if(shared){window.open('/api/export','_blank');return;}
   var csv='设备,错误类型,日期,开始时间,结束时间,持续(秒),重复次数,条码,状态\n';
-  for(var i=0;i<incidents.length;i++){var inc=incidents[i];csv+=inc.device+','+inc.type+','+inc.date+','+inc.st.slice(11,19)+','+inc.et.slice(11,19)+','+inc.dur+','+inc.rc+','+(inc.rb||inc.bc||'')+','+(inc.resolved?'已解决':'未解决')+'\n';}
+  for(var i=0;i<incidents.length;i++){
+    var inc=incidents[i];
+    csv+=inc.device+','+inc.type+','+inc.date+','+inc.st.slice(11,19)+','+inc.et.slice(11,19)+','+inc.dur+','+inc.rc+','+(inc.rb||inc.bc||'')+','+(inc.resolved?'已解决':'未解决')+'\n';
+  }
   var blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});
-  var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='wcs-incidents.csv';a.click();URL.revokeObjectURL(a.href);
+  var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='wcs-incidents.csv';a.click();
+  URL.revokeObjectURL(a.href);
 }
-
-getSetup();
-</script></body></html>
+</script>
+</body>
+</html>
