@@ -1,6 +1,6 @@
 <!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>WCS 日志分析</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
-<script>function loadMQTT(cb){var s=document.createElement("script");s.src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js";s.onload=function(){if(cb)cb();};s.onerror=function(){alert("MQTT fail");};document.head.appendChild(s);}</script>
+<script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
 <style>
 body{font:14px/1.5 -apple-system,"Microsoft YaHei",sans-serif;background:#11141b;color:#e0e4ec;margin:0;padding:16px 24px}
 h1{font-size:18px;margin:0}.row{display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap}
@@ -283,7 +283,7 @@ function clearDB(cb){
 var mqttClient=null;var mqttConnected=false;
 var peers={};var heartbeatTimer=null;
 var CHUNK_SIZE=50000;var pendingChunks={};
-var TOPIC_PEER='wcs/peer';var TOPIC_META='wcs/log/meta';var TOPIC_DELETE='wcs/log/delete';
+var TOPIC_PEER='wcs/peer';var TOPIC_META='wcs/log/meta';var TOPIC_CHUNK='wcs/log/chunk';var TOPIC_DELETE='wcs/log/delete';
 
 function tryConnectMQTT(){
   if(!brokerList.length||typeof mqtt==='undefined')return;
@@ -293,7 +293,7 @@ function tryConnectMQTT(){
     mqttClient=mqtt.connect(url,{keepalive:30,reconnectPeriod:0});
     mqttClient.on('connect',function(){
       mqttConnected=true;
-      mqttClient.subscribe([TOPIC_PEER,TOPIC_META,TOPIC_DELETE],{qos:1});
+      mqttClient.subscribe([TOPIC_PEER,TOPIC_META,TOPIC_DELETE,'wcs/log/req/+',TOPIC_CHUNK],{qos:1});
       document.getElementById('tag').innerHTML='在线 · 共享';
       startHeartbeat();
       mqttClient.publish(TOPIC_PEER,JSON.stringify({uid:myUID,name:myName,ts:Date.now(),type:'hello'}),{qos:1});
