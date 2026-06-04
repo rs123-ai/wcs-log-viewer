@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>WCS 日志分析</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
-<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
 <style>
 body{font:14px/1.5 -apple-system,"Microsoft YaHei",sans-serif;background:#11141b;color:#e0e4ec;margin:0;padding:16px 24px}
 h1{font-size:18px;margin:0}
@@ -255,7 +255,19 @@ function openDB(cb){
 
 function saveToDB(date,data){
   if(!db)return;
-  try{var tx=db.transaction('logs','readwrite');var store=tx.objectStore('logs');store.put({date:date,filename:data.filename,entries:data.entries});}catch(e){}
+  try{var tx=db.transaction('logs','readwrite');var store=tx.objectStore('logs');store.put({date:date,filename:data.filename,entries:data.entries,_raw:data._raw||''});}catch(e){}
+}
+
+function loadFromDB(cb){
+  if(!db){if(cb)cb();return;}
+  try{
+    var tx=db.transaction('logs','readonly');var store=tx.objectStore('logs');var req=store.getAll();
+    req.onsuccess=function(){
+      var items=req.result;for(var i=0;i<items.length;i++){var item=items[i];logStore[item.date]=item;}
+      if(cb)cb();
+    };
+    req.onerror=function(){if(cb)cb();};
+  }catch(e){if(cb)cb();}
 }
 
 function loadFromDB(cb){
@@ -287,6 +299,7 @@ document.addEventListener('DOMContentLoaded',function(){
         var r=new FileReader();
         r.onload=function(){
           var p=parseLog(r.result,file.name);
+          p._raw=r.result; // Keep raw for sharing
           logStore[p.date]=p;
           saveToDB(p.date,p);
           broadcastMQTT(p.date,p);
@@ -706,8 +719,13 @@ function renderWTrend(dailyData){
   }catch(e){}
 }
 
-// ============================== MQTT SHARING ==============================
-var mqttClient=null;var mqttConnected=false;var MQTT_TOPIC='wcs/log-data';
+// ============================== MQTT SHARING (chunked file transfer) ==============================
+var mqttClient=null;var mqttConnected=false;
+var MQTT_META='wcs/log/meta';
+var MQTT_CHUNK='wcs/log/chunk';
+var MQTT_HELLO='wcs/log/hello';
+var CHUNK_SIZE=14000; // 14KB per chunk
+var pendingChunks={}; // fileId → {filename,date,total,received,chunks}
 
 function toggleMQTTConfig(){
   var c=document.getElementById('mqttCfg');
@@ -715,7 +733,7 @@ function toggleMQTTConfig(){
 }
 
 function connectMQTT(){
-  if(typeof mqtt==='undefined'){alert('MQTT库加载失败');return;}
+  if(typeof mqtt==='undefined'){document.getElementById('mqttStatus').innerHTML='<span style=\"color:#f44\">MQTT库未加载</span>';return;}
   var url=document.getElementById('mqttUrl').value.trim();
   if(!url){url='wss://broker.emqx.io:8084/mqtt';document.getElementById('mqttUrl').value=url;}
   disconnectMQTT();
@@ -723,34 +741,73 @@ function connectMQTT(){
     mqttClient=mqtt.connect(url);
     mqttClient.on('connect',function(){
       mqttConnected=true;
-      mqttClient.subscribe(MQTT_TOPIC);
+      mqttClient.subscribe([MQTT_META,MQTT_CHUNK,MQTT_HELLO]);
       document.getElementById('mqttStatus').innerHTML='<span style=\"color:#0c8\">已连接</span>';
       document.getElementById('btnMQTT').style.color='#0c8';
-      // Request existing data from peers
-      mqttClient.publish(MQTT_TOPIC,JSON.stringify({type:'hello'}));
+      document.getElementById('tag').innerHTML='在线 · 共享';
+      // Say hello to request existing files
+      mqttClient.publish(MQTT_HELLO,JSON.stringify({type:'hello',time:Date.now()}));
     });
     mqttClient.on('message',function(topic,payload){
       try{
         var msg=JSON.parse(payload.toString());
-        if(msg.date&&msg.entries){
-          if(!logStore[msg.date]){
-            logStore[msg.date]={filename:msg.filename,date:msg.date,entries:msg.entries};
-            saveToDB(msg.date,logStore[msg.date]);
-            renderDateTabs();refreshDay();
-          }
-        }else if(msg.type==='hello'&&mqttConnected){
-          // Respond to hello with all data
+        if(topic===MQTT_HELLO&&msg.type==='hello'){
+          // Respond with file list (meta)
           var dates=Object.keys(logStore);
           for(var i=0;i<dates.length;i++){
             var d=logStore[dates[i]];
-            mqttClient.publish(MQTT_TOPIC,JSON.stringify({date:d.date,filename:d.filename,entries:d.entries}));
+            if(d._raw){ // has raw file content
+              var fileId=d.date+'_'+Date.now()+'_'+i;
+              var total=Math.ceil(d._raw.length/CHUNK_SIZE);
+              mqttClient.publish(MQTT_META,JSON.stringify({fileId:fileId,filename:d.filename,date:d.date,total:total,size:d._raw.length}));
+              // Send chunks with small delay
+              sendChunks(fileId,d._raw,total);
+            }
+          }
+        }else if(topic===MQTT_META&&msg.fileId){
+          // New file incoming
+          if(logStore[msg.date])return; // Already have this date
+          pendingChunks[msg.fileId]={filename:msg.filename,date:msg.date,total:msg.total,received:0,chunks:[],size:msg.size};
+        }else if(topic===MQTT_CHUNK&&msg.fileId){
+          var pc=pendingChunks[msg.fileId];
+          if(!pc)return;
+          pc.chunks[msg.idx]=msg.data;
+          pc.received++;
+          if(pc.received>=pc.total){
+            // Reassemble
+            var raw='';for(var j=0;j<pc.total;j++)raw+=pc.chunks[j];
+            delete pendingChunks[msg.fileId];
+            // Parse
+            var p=parseLog(raw,pc.filename);
+            logStore[p.date]=p;p._raw=raw;
+            saveToDB(p.date,p);
+            renderDateTabs();refreshDay();
+            document.getElementById('msg').innerHTML='<span class="ok">收到: '+pc.filename+' → '+p.entries.length+'条</span>';
           }
         }
       }catch(e){}
     });
-    mqttClient.on('error',function(){document.getElementById('mqttStatus').innerHTML='<span style=\"color:#f44\">错误</span>';});
-    mqttClient.on('close',function(){mqttConnected=false;document.getElementById('mqttStatus').innerHTML='<span style=\"color:#78809a\">已断开</span>';document.getElementById('btnMQTT').style.color='';});
-  }catch(e){alert('连接失败: '+e.message);}
+    mqttClient.on('error',function(){
+      document.getElementById('mqttStatus').innerHTML='<span style=\"color:#f44\">连接错误</span>';
+    });
+    mqttClient.on('close',function(){
+      mqttConnected=false;
+      document.getElementById('mqttStatus').innerHTML='<span style=\"color:#78809a\">已断开</span>';
+      document.getElementById('btnMQTT').style.color='';
+      document.getElementById('tag').innerHTML='离线';
+    });
+  }catch(e){document.getElementById('mqttStatus').innerHTML='<span style=\"color:#f44\">失败</span>';}
+}
+
+function sendChunks(fileId,raw,total){
+  for(var i=0;i<total;i++){
+    (function(idx){
+      setTimeout(function(){
+        if(!mqttClient||!mqttConnected)return;
+        mqttClient.publish(MQTT_CHUNK,JSON.stringify({fileId:fileId,idx:idx,data:raw.substring(idx*CHUNK_SIZE,(idx+1)*CHUNK_SIZE)}));
+      },idx*50); // 50ms between chunks
+    })(i);
+  }
 }
 
 function disconnectMQTT(){
@@ -758,11 +815,16 @@ function disconnectMQTT(){
   mqttConnected=false;
   document.getElementById('mqttStatus').innerHTML='';
   document.getElementById('btnMQTT').style.color='';
+  document.getElementById('tag').innerHTML='离线';
 }
 
 function broadcastMQTT(date,data){
   if(!mqttClient||!mqttConnected)return;
-  try{mqttClient.publish(MQTT_TOPIC,JSON.stringify({date:date,filename:data.filename,entries:data.entries}));}catch(e){}
+  if(!data._raw)return; // No raw file content to share
+  var fileId=date+'_'+Date.now();
+  var total=Math.ceil(data._raw.length/CHUNK_SIZE);
+  mqttClient.publish(MQTT_META,JSON.stringify({fileId:fileId,filename:data.filename,date:data.date,total:total,size:data._raw.length}));
+  sendChunks(fileId,data._raw,total);
 }
 
 // ============================== CLEAR / EXPORT ==============================
