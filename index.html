@@ -293,7 +293,7 @@ function tryConnectMQTT(){
     mqttClient=mqtt.connect(url,{keepalive:30,reconnectPeriod:0});
     mqttClient.on('connect',function(){
       mqttConnected=true;
-      mqttClient.subscribe([TOPIC_PEER,TOPIC_META,TOPIC_DELETE,'wcs/log/req/+',TOPIC_CHUNK],{qos:1});
+      mqttClient.subscribe([TOPIC_PEER,TOPIC_META,TOPIC_DELETE,'wcs/log/req/+/+',TOPIC_CHUNK],{qos:1});
       document.getElementById('tag').innerHTML='在线 · 共享';
       startHeartbeat();
       mqttClient.publish(TOPIC_PEER,JSON.stringify({uid:myUID,name:myName,ts:Date.now(),type:'hello'}),{qos:1});
